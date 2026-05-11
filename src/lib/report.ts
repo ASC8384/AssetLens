@@ -5,6 +5,30 @@ import { formatMoney, formatPercent } from './format';
 
 export type ReportMode = 'endpoint' | 'periodic';
 
+export type ReportRange = {
+  label: string;
+  startDate: string;
+  endDate: string;
+};
+
+export function availableReportRanges(data: AppData): ReportRange[] {
+  const first = data.snapshots[0]?.date ?? '';
+  const last = data.snapshots[data.snapshots.length - 1]?.date ?? '';
+  return [
+    { label: '全部', startDate: first, endDate: last },
+    { label: '近 1 个月', startDate: shiftMonth(last, -1), endDate: last },
+    { label: '近 3 个月', startDate: shiftMonth(last, -3), endDate: last },
+    { label: '近 1 年', startDate: shiftMonth(last, -12), endDate: last },
+  ];
+}
+
+function shiftMonth(date: string, offset: number): string {
+  if (!date) return '';
+  const current = new Date(`${date}T00:00:00`);
+  current.setMonth(current.getMonth() + offset);
+  return current.toISOString().slice(0, 10);
+}
+
 export function snapshotsInRange(data: AppData, startDate: string, endDate: string): AssetSnapshot[] {
   return data.snapshots.filter((snapshot) => {
     if (startDate && snapshot.date < startDate) return false;
@@ -25,10 +49,7 @@ export function generateMarkdownReport(data: AppData, startDate: string, endDate
   const accountDiffs = diffAccounts(first, last);
   const largestIncrease = accountDiffs[0];
   const largestDecrease = [...accountDiffs].reverse()[0];
-  const ratioDiffs = last.entries
-    .filter((entry) => entry.ratioDiff !== null && entry.ratioDiff !== undefined)
-    .sort((a, b) => Math.abs(b.ratioDiff ?? 0) - Math.abs(a.ratioDiff ?? 0))
-    .slice(0, 5);
+  const contributionRows = accountContributionRows(first, last).slice(0, 8);
 
   return [
     `# 资产复盘报告（${first.date} 至 ${last.date}）`,
@@ -47,18 +68,22 @@ export function generateMarkdownReport(data: AppData, startDate: string, endDate
     '## 汇率影响',
     exchangeRateSummary(first, last),
     '',
-    '## 占比差异较大项目',
-    ...(ratioDiffs.length === 0 ? ['- 无明显占比差异。'] : ratioDiffs.map((entry) => `- ${entry.accountName}：${formatPercent(entry.ratioDiff)}`)),
+    '## 账户贡献榜',
+    ...contributionRows.map((row) => `- ${row.accountName}：${formatMoney(row.change)}`),
     '',
     periodicSummary(snapshots, mode),
   ].join('\n');
 }
 
-function diffAccounts(first: AssetSnapshot, last: AssetSnapshot): Array<{ accountName: string; change: number }> {
+export function accountContributionRows(first: AssetSnapshot, last: AssetSnapshot): Array<{ accountName: string; change: number }> {
   const firstAmounts = new Map(first.entries.map((entry) => [entry.accountId, entry.amountCny ?? 0]));
   return last.entries
     .map((entry) => ({ accountName: entry.accountName, change: (entry.amountCny ?? 0) - (firstAmounts.get(entry.accountId) ?? 0) }))
     .sort((a, b) => b.change - a.change);
+}
+
+function diffAccounts(first: AssetSnapshot, last: AssetSnapshot): Array<{ accountName: string; change: number }> {
+  return accountContributionRows(first, last);
 }
 
 function categoryLine(category: AssetCategory, start: number, end: number): string {

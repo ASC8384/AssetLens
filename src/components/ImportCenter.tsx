@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { buildSnapshotsFromDraft, createImportDraft, mergeImportedData, parseExcelFile, parsePastedTable } from '../lib/importers';
+import { analyzeImportQuality, ignoreTotalColumns } from '../lib/importQuality';
+import { formatMoney, formatPercent } from '../lib/format';
 import type { AppData, DuplicateDateMode, FieldMapping, ImportDraft } from '../lib/types';
 import { categories } from '../lib/defaults';
 
@@ -9,6 +11,7 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
   const [pasteText, setPasteText] = useState('');
   const [duplicateMode, setDuplicateMode] = useState<DuplicateDateMode>('overwrite');
   const importedPreview = useMemo(() => draft ? buildSnapshotsFromDraft(draft, data.accounts) : null, [draft, data.accounts]);
+  const importQuality = useMemo(() => importedPreview ? analyzeImportQuality(importedPreview.snapshots, importedPreview.accounts.length) : null, [importedPreview]);
 
   async function handleFile(file: File | null) {
     if (!file) return;
@@ -85,6 +88,7 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
                 <option value="keep">重复日期保留新记录</option>
                 <option value="skip">重复日期跳过</option>
               </select>
+              {importQuality?.hasSuspiciousTotal && <button onClick={() => setDraft(ignoreTotalColumns(draft))}>一键忽略合计列</button>}
               <button className="primary" onClick={confirmImport}>确认导入</button>
               <button onClick={() => setDraft(null)}>取消</button>
             </div>
@@ -132,9 +136,30 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
             </table>
           </div>
 
-          {importedPreview && (
-            <div className="preview-note">
-              将导入 {importedPreview.snapshots.length} 期、{importedPreview.accounts.length} 个账户。
+          {importQuality && (
+            <div className="quality-preview">
+              <div className="quality-summary">
+                <strong>将导入 {importQuality.snapshotCount} 期、{importQuality.accountCount} 个账户</strong>
+                <span>{importQuality.dangerCount} 个严重异常 · {importQuality.warningCount} 个轻微异常</span>
+              </div>
+              {importQuality.hasSuspiciousTotal && <p className="danger-text">检测到合计列疑似不是总资产，可点击“一键忽略合计列”。</p>}
+              <div className="table-wrap small-table">
+                <table>
+                  <thead><tr><th>日期</th><th>网页重算总资产</th><th>Excel 合计</th><th>差异</th><th>差异率</th><th>状态</th></tr></thead>
+                  <tbody>
+                    {importQuality.rows.map((row) => (
+                      <tr key={row.date}>
+                        <td>{row.date}</td>
+                        <td>{formatMoney(row.computedTotalCny)}</td>
+                        <td>{formatMoney(row.excelTotal)}</td>
+                        <td>{formatMoney(row.diff)}</td>
+                        <td>{formatPercent(row.diffRatio)}</td>
+                        <td className={row.status === 'danger' ? 'danger-text' : row.status === 'warning' ? 'warning-text' : ''}>{row.status === 'danger' ? '严重' : row.status === 'warning' ? '提示' : '正常'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

@@ -1,13 +1,18 @@
-import { useMemo } from 'react';
-import { applyAccountsToSnapshots, recalculateSnapshot, sortSnapshots } from '../lib/calculations';
-import { categories } from '../lib/defaults';
-import { downloadText, formatMoney, formatPercent, parseNumber } from '../lib/format';
-import type { AppData, AssetCategory, AssetSnapshot } from '../lib/types';
+import { useMemo, useState } from 'react';
+import { applyAccountsToSnapshots, buildEntry, recalculateSnapshot, sortSnapshots } from '../lib/calculations';
+import { accountIdFromName, categories, createAccountConfig } from '../lib/defaults';
+import { filterAccounts, filterSnapshotsByIssue, sortSnapshotsForDetails, type DetailIssueFilter, type DetailSortMode } from '../lib/details';
+import { downloadText, formatMoney, parseNumber } from '../lib/format';
+import type { AccountConfig, AppData, AssetCategory, AssetSnapshot } from '../lib/types';
 
 export function DetailsTable({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
   const mode = data.preferences.detailMode;
   const categoryFilter = data.preferences.categoryFilter;
-  const visibleAccounts = useMemo(() => data.accounts.filter((account) => !account.hidden && (categoryFilter === '全部' || account.category === categoryFilter)), [data.accounts, categoryFilter]);
+  const [search, setSearch] = useState('');
+  const [sortMode, setSortMode] = useState<DetailSortMode>('date-desc');
+  const [issueFilter, setIssueFilter] = useState<DetailIssueFilter>('all');
+  const visibleAccounts = useMemo(() => filterAccounts(data.accounts, categoryFilter, search), [data.accounts, categoryFilter, search]);
+  const visibleSnapshots = useMemo(() => filterSnapshotsByIssue(sortSnapshotsForDetails(data.snapshots, sortMode), issueFilter), [data.snapshots, sortMode, issueFilter]);
 
   function updatePreference(patch: Partial<AppData['preferences']>) {
     onChange({ ...data, preferences: { ...data.preferences, ...patch } });
@@ -44,9 +49,48 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
     onChange({ ...data, snapshots: sortSnapshots([...data.snapshots, recalculateSnapshot({ ...snapshot, id: crypto.randomUUID(), date })]) });
   }
 
+  function addAccount() {
+    const name = window.prompt('请输入新账户名称');
+    if (!name?.trim()) return;
+    const account = createAccountConfig(name.trim());
+    if (data.accounts.some((existing) => existing.id === account.id)) return;
+    onChange({
+      ...data,
+      accounts: [...data.accounts, account],
+      snapshots: data.snapshots.map((snapshot) => recalculateSnapshot({
+        ...snapshot,
+        entries: [...snapshot.entries, buildEntry(account.name, null, null, account)],
+      })),
+    });
+  }
+
+  function deleteAccount(account: AccountConfig) {
+    if (!window.confirm(`确定删除账户“${account.name}”吗？`)) return;
+    onChange({
+      ...data,
+      accounts: data.accounts.filter((item) => item.id !== account.id),
+      snapshots: data.snapshots.map((snapshot) => recalculateSnapshot({
+        ...snapshot,
+        entries: snapshot.entries.filter((entry) => entry.accountId !== account.id),
+      })),
+    });
+  }
+
+  function renameAccount(account: AccountConfig) {
+    const name = window.prompt('请输入新的账户名称', account.name)?.trim();
+    if (!name) return;
+    const id = accountIdFromName(name);
+    const accounts = data.accounts.map((item) => item.id === account.id ? { ...item, id, name } : item);
+    const snapshots = data.snapshots.map((snapshot) => recalculateSnapshot({
+      ...snapshot,
+      entries: snapshot.entries.map((entry) => entry.accountId === account.id ? { ...entry, accountId: id, accountName: name } : entry),
+    }));
+    onChange({ ...data, accounts, snapshots });
+  }
+
   function exportCsv() {
     const headers = ['时间', ...visibleAccounts.map((account) => account.name), 'Excel原合计', '网页重算合计'];
-    const lines = data.snapshots.map((snapshot) => {
+    const lines = visibleSnapshots.map((snapshot) => {
       const entries = new Map(snapshot.entries.map((entry) => [entry.accountId, entry]));
       return [snapshot.date, ...visibleAccounts.map((account) => entries.get(account.id)?.originalAmount ?? ''), snapshot.excelTotal ?? '', snapshot.computedTotalCny].join(',');
     });
@@ -69,6 +113,19 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
             <option value="全部">全部大类</option>
             {categories.map((category) => <option key={category} value={category}>{category}</option>)}
           </select>
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索账户" />
+          <select value={sortMode} onChange={(event) => setSortMode(event.target.value as DetailSortMode)}>
+            <option value="date-desc">日期从新到旧</option>
+            <option value="date-asc">日期从旧到新</option>
+            <option value="total-desc">总资产从高到低</option>
+            <option value="total-asc">总资产从低到高</option>
+            <option value="diff-desc">合计差异优先</option>
+          </select>
+          <select value={issueFilter} onChange={(event) => setIssueFilter(event.target.value as DetailIssueFilter)}>
+            <option value="all">全部记录</option>
+            <option value="issues-only">只看异常</option>
+          </select>
+          <button onClick={addAccount}>新增账户</button>
           <button onClick={exportCsv}>导出当前表格</button>
         </div>
       </div>
@@ -79,8 +136,8 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
             <tr>
               <th className="sticky-col">时间</th>
               {visibleAccounts.map((account) => mode === 'compact'
-                ? <th key={account.id}>{account.name}<small>{account.category}</small></th>
-                : <th key={account.id} colSpan={6}>{account.name}<small>{account.category}</small></th>)}
+                ? <th key={account.id}>{account.name}<small>{account.category} · <button className="link-button" onClick={() => renameAccount(account)}>改名</button> <button className="link-button" onClick={() => deleteAccount(account)}>删除</button></small></th>
+                : <th key={account.id} colSpan={4}>{account.name}<small>{account.category} · <button className="link-button" onClick={() => renameAccount(account)}>改名</button> <button className="link-button" onClick={() => deleteAccount(account)}>删除</button></small></th>)}
               <th>Excel 原合计</th>
               <th>网页重算合计</th>
               <th>合计差异</th>
@@ -90,7 +147,7 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
             {mode === 'analysis' && (
               <tr>
                 <th className="sticky-col">字段</th>
-                {visibleAccounts.map((account) => ['原始金额', '币种', '汇率', '折算人民币', 'Excel占比', '差异'].map((label) => <th key={`${account.id}-${label}`}>{label}</th>))}
+                {visibleAccounts.map((account) => ['原始金额', '币种', '汇率', '折算人民币'].map((label) => <th key={`${account.id}-${label}`}>{label}</th>))}
                 <th />
                 <th />
                 <th />
@@ -100,7 +157,7 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
             )}
           </thead>
           <tbody>
-            {data.snapshots.map((snapshot) => {
+            {visibleSnapshots.map((snapshot) => {
               const entries = new Map(snapshot.entries.map((entry) => [entry.accountId, entry]));
               return (
                 <tr key={snapshot.id}>
@@ -115,8 +172,6 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
                       <td key={`${account.id}-currency`}>{entry?.currency ?? account.defaultCurrency}</td>,
                       <td key={`${account.id}-rate`}>{entry?.exchangeRate ?? '缺失'}</td>,
                       <td key={`${account.id}-cny`}>{formatMoney(entry?.amountCny)}</td>,
-                      <td key={`${account.id}-excel`}>{formatPercent(entry?.excelRatio)}</td>,
-                      <td key={`${account.id}-diff`} className={Math.abs(entry?.ratioDiff ?? 0) >= 0.01 ? 'danger-text' : Math.abs(entry?.ratioDiff ?? 0) >= 0.002 ? 'warning-text' : ''}>{formatPercent(entry?.ratioDiff)}</td>,
                     ];
                   })}
                   <td>{formatMoney(snapshot.excelTotal)}</td>
