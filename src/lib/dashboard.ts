@@ -1,5 +1,6 @@
 import { categoryTotals } from './calculations';
-import type { AppData, AssetSnapshot } from './types';
+import { categories } from './defaults';
+import type { AppData, AssetCategory, AssetSnapshot } from './types';
 
 export type TotalQuality = {
   status: 'ok' | 'warning' | 'danger' | 'missing';
@@ -18,6 +19,27 @@ export function totalQuality(snapshot: AssetSnapshot | undefined): TotalQuality 
   if (absRatio >= 0.05) return { status: 'danger', diff, diffRatio, message: 'Excel 原合计和网页重算合计差异很大，请检查合计列是否识别正确。' };
   if (absRatio >= 0.01) return { status: 'warning', diff, diffRatio, message: 'Excel 原合计和网页重算合计存在差异。' };
   return { status: 'ok', diff, diffRatio, message: 'Excel 原合计和网页重算合计基本一致。' };
+}
+
+export type DashboardSummary = {
+  leaderCategory: AssetCategory | null;
+  leaderAmount: number;
+  riskAssetRatio: number | null;
+};
+
+export function dashboardSummary(data: AppData): DashboardSummary {
+  const latest = data.snapshots[data.snapshots.length - 1];
+  if (!latest) return { leaderCategory: null, leaderAmount: 0, riskAssetRatio: null };
+  const totals = categoryTotals(latest, data.accounts);
+  const leader = categories
+    .map((category) => ({ category, amount: totals[category] }))
+    .sort((a, b) => b.amount - a.amount)[0];
+  const riskAmount = totals['基金'] + totals['证券'];
+  return {
+    leaderCategory: leader?.category ?? null,
+    leaderAmount: leader?.amount ?? 0,
+    riskAssetRatio: latest.computedTotalCny === 0 ? null : riskAmount / latest.computedTotalCny,
+  };
 }
 
 export function categoryTrendData(data: AppData): Array<Record<string, number | string>> {

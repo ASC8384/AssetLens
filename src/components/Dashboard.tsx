@@ -1,6 +1,6 @@
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { accountChanges, categoryTotals, totalChange } from '../lib/calculations';
-import { categoryTrendData, totalQuality } from '../lib/dashboard';
+import { categoryTrendData, dashboardSummary, totalQuality } from '../lib/dashboard';
 import { categories, categoryColors } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
 import type { AppData } from '../lib/types';
@@ -13,6 +13,7 @@ export function Dashboard({ data }: { data: AppData }) {
   const categoryData = categories.map((category) => ({ name: category, value: totals[category] })).filter((item) => item.value > 0);
   const trendData = categoryTrendData(data);
   const topChanges = accountChanges(snapshots);
+  const summary = dashboardSummary(data);
   const quality = totalQuality(latest);
 
   if (!latest) {
@@ -21,17 +22,30 @@ export function Dashboard({ data }: { data: AppData }) {
 
   return (
     <section className="dashboard">
-      <div className="dashboard-hero">
-        <div>
+      <div className="dashboard-hero dashboard-hero-v2">
+        <div className="hero-copy">
           <span className="eyebrow">PORTFOLIO RADAR</span>
           <h2>{formatMoney(latest.computedTotalCny)}</h2>
           <p>最新净资产 · {latest.date}</p>
+        </div>
+        <div className="hero-orbit" aria-hidden="true">
+          <span className="orbit-ring ring-one" />
+          <span className="orbit-ring ring-two" />
+          <span className="orbit-dot" />
+          <strong>{formatPercent(summary.riskAssetRatio)}</strong>
+          <small>风险资产占比</small>
         </div>
         <div className="hero-delta">
           <span>较上一期</span>
           <strong className={(change.amount ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(change.amount)}</strong>
           <small>{formatPercent(change.percent)}</small>
         </div>
+      </div>
+
+      <div className="insight-strip">
+        <div><span>主导资产</span><strong>{summary.leaderCategory ?? '—'}</strong><small>{formatMoney(summary.leaderAmount)}</small></div>
+        <div><span>风险资产</span><strong>{formatPercent(summary.riskAssetRatio)}</strong><small>基金 + 证券</small></div>
+        <div><span>数据质量</span><strong>{quality.status === 'danger' ? '需检查' : '正常'}</strong><small>{quality.message}</small></div>
       </div>
 
       <div className="metric-grid">
@@ -47,9 +61,9 @@ export function Dashboard({ data }: { data: AppData }) {
         </div>
       )}
 
-      <div className="chart-grid main-charts">
-        <ChartCard title="总资产趋势（含分资产）">
-          <ResponsiveContainer width="100%" height={280}>
+      <div className="chart-grid main-charts dashboard-feature-grid">
+        <ChartCard title="总资产趋势（含分资产）" className="feature-chart">
+          <ResponsiveContainer width="100%" height={340}>
             <LineChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
@@ -64,7 +78,7 @@ export function Dashboard({ data }: { data: AppData }) {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="最新资产结构">
+        <ChartCard title="最新资产结构" className="structure-card">
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={92} paddingAngle={4}>
@@ -129,8 +143,8 @@ function Metric({ title, value, hint, tone }: { title: string; value: string; hi
   );
 }
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div className="chart-card"><h3>{title}</h3>{children}</div>;
+function ChartCard({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
+  return <div className={`chart-card ${className}`}><h3>{title}</h3>{children}</div>;
 }
 
 function EmptyState() {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryTrendData } from './dashboard';
+import { categoryTrendData, dashboardSummary } from './dashboard';
 import { recalculateSnapshot } from './calculations';
 import type { AppData, AssetSnapshot } from './types';
 
@@ -39,6 +39,24 @@ function snapshot(date: string, fund: number, cash: number): AssetSnapshot {
     ],
   });
 }
+
+describe('dashboardSummary', () => {
+  it('returns latest category leader and risk asset ratio', () => {
+    const data: AppData = {
+      version: 1,
+      snapshots: [snapshot('2026-01-01', 100, 40), snapshot('2026-02-01', 120, 60)],
+      accounts: [],
+      defaultExchangeRates: { CNY: 1 },
+      preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
+    };
+
+    expect(dashboardSummary(data)).toMatchObject({
+      leaderCategory: '基金',
+      leaderAmount: 120,
+      riskAssetRatio: 120 / 180,
+    });
+  });
+});
 
 describe('categoryTrendData', () => {
   it('returns total and per-category trend rows for dashboard charts', () => {
