@@ -5,12 +5,28 @@ import { parseNumber } from './format';
 import type { AccountConfig, AppData, AssetSnapshot, DuplicateDateMode, FieldMapping, ImportDraft, ParsedTable } from './types';
 
 export function parsePastedTable(text: string): ParsedTable {
-  const rows = text
+  const rawRows = text
     .trim()
     .split(/\r?\n/)
-    .map((line) => line.split('\t').map((cell) => cell.trim()));
-  const [headers = [], ...dataRows] = rows;
+    .map(splitPastedLine)
+    .filter((row) => row.some(Boolean));
+  const firstDataIndex = rawRows.findIndex((row) => looksLikeDataRow(row));
+  const headerRows = firstDataIndex === -1 ? rawRows.slice(0, 1) : rawRows.slice(0, firstDataIndex);
+  const dataRows = firstDataIndex === -1 ? rawRows.slice(1) : rawRows.slice(firstDataIndex);
+  const headers = headerRows.flat();
   return { headers, rows: dataRows.filter((row) => row.some(Boolean)) };
+}
+
+function splitPastedLine(line: string): string[] {
+  const trimmed = line.trim();
+  if (!trimmed) return [];
+  if (trimmed.includes('\t')) return trimmed.split('\t').map((cell) => cell.trim());
+  return trimmed.split(/\s{2,}/).map((cell) => cell.trim());
+}
+
+function looksLikeDataRow(row: string[]): boolean {
+  const first = row[0]?.trim() ?? '';
+  return /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(first) || /^\d{4}[-/]\d{1,2}$/.test(first);
 }
 
 export async function parseExcelFile(file: File): Promise<ParsedTable> {

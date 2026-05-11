@@ -71,4 +71,23 @@ describe('importers', () => {
     expect(snapshots[0].entries[0].excelRatio).toBe(0.5);
     expect(snapshots[0].computedTotalCny).toBe(200);
   });
+
+  it('parses whitespace separated pasted tables from chat or plain text', () => {
+    const input = `时间        基金账户A      占比    现金账户A      占比    现金账户B        占比    基金账户B        占比    基金账户C        占比    证券    占比    现金账户C
+        占比    杂      占比    基金账户D    占比    合计
+    2025-11-01  48000   26.37%  12000   6.59%   4500    2.47%   22000   12.09%  18000   9.89%   35000   19.23%  6000    3.30%   12000   6.59%   3000    1.65%   8500
+    2025-12-01  50500   26.93%  10500   5.60%   5200    2.77%   23000   12.27%  18500   9.87%   36500   19.47%  5500    2.93%   13000   6.93%   2800    1.49%   9000`;
+
+    const parsed = parsePastedTable(input);
+    const draft = createImportDraft(parsed);
+    const { snapshots } = buildSnapshotsFromDraft(draft, []);
+
+    expect(parsed.headers).toEqual(['时间', '基金账户A', '占比', '现金账户A', '占比', '现金账户B', '占比', '基金账户B', '占比', '基金账户C', '占比', '证券', '占比', '现金账户C', '占比', '杂', '占比', '基金账户D', '占比', '合计']);
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots[0].date).toBe('2025-11-01');
+    expect(snapshots[0].entries).toHaveLength(9);
+    expect(snapshots[0].entries[7]).toMatchObject({ accountName: '杂', originalAmount: 12000, excelRatio: 0.0659 });
+    expect(snapshots[0].entries[8]).toMatchObject({ accountName: '基金账户D', originalAmount: 3000, excelRatio: 0.0165 });
+    expect(snapshots[0].excelTotal).toBe(8500);
+  });
 });
