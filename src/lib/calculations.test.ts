@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { recalculateSnapshot } from './calculations';
 import { parseNumber } from './format';
+import { totalQuality } from './dashboard';
 import { createImportDraft, buildSnapshotsFromDraft, parsePastedTable } from './importers';
 
 const baseEntry = {
@@ -58,17 +59,38 @@ describe('recalculateSnapshot', () => {
   });
 });
 
+describe('dashboard helpers', () => {
+  it('flags likely wrong total column when excel total is far from computed total', () => {
+    const snapshot = recalculateSnapshot({
+      id: 's1',
+      date: '2026-05-01',
+      exchangeRates: { CNY: 1 },
+      computedTotalCny: 0,
+      excelTotal: 8500,
+      entries: [
+        { ...baseEntry, originalAmount: 48000, excelRatio: 0.2637 },
+        { ...baseEntry, accountId: 'cash', accountName: '现金账户A', category: '现金', originalAmount: 12000, excelRatio: 0.0659 },
+      ],
+    });
+
+    expect(totalQuality(snapshot)).toMatchObject({
+      status: 'danger',
+      message: 'Excel 原合计和网页重算合计差异很大，请检查合计列是否识别正确。',
+    });
+  });
+});
+
 describe('importers', () => {
-  it('pairs duplicate ratio headers with previous account columns', () => {
+  it('ignores ratio columns by default and imports account amounts only', () => {
     const parsed = parsePastedTable('时间\t基金账户A\t占比\t现金账户B\t占比\t合计\n2026-05\t100\t50%\t100\t50%\t200');
     const draft = createImportDraft(parsed);
 
-    expect(draft.mappings[2]).toMatchObject({ role: 'ratio', ratioForColumnIndex: 1 });
-    expect(draft.mappings[4]).toMatchObject({ role: 'ratio', ratioForColumnIndex: 3 });
+    expect(draft.mappings[2]).toMatchObject({ role: 'ignore', import: false });
+    expect(draft.mappings[4]).toMatchObject({ role: 'ignore', import: false });
 
     const { snapshots } = buildSnapshotsFromDraft(draft, []);
     expect(snapshots[0].entries).toHaveLength(2);
-    expect(snapshots[0].entries[0].excelRatio).toBe(0.5);
+    expect(snapshots[0].entries[0].excelRatio).toBeNull();
     expect(snapshots[0].computedTotalCny).toBe(200);
   });
 
@@ -86,8 +108,8 @@ describe('importers', () => {
     expect(snapshots).toHaveLength(2);
     expect(snapshots[0].date).toBe('2025-11-01');
     expect(snapshots[0].entries).toHaveLength(9);
-    expect(snapshots[0].entries[7]).toMatchObject({ accountName: '杂', originalAmount: 12000, excelRatio: 0.0659 });
-    expect(snapshots[0].entries[8]).toMatchObject({ accountName: '基金账户D', originalAmount: 3000, excelRatio: 0.0165 });
+    expect(snapshots[0].entries[7]).toMatchObject({ accountName: '杂', originalAmount: 12000, excelRatio: null });
+    expect(snapshots[0].entries[8]).toMatchObject({ accountName: '基金账户D', originalAmount: 3000, excelRatio: null });
     expect(snapshots[0].excelTotal).toBe(8500);
   });
 });

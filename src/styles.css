@@ -58,8 +58,11 @@ input[type='file'] { display: none; }
 }
 .panel { margin-top: 18px; padding: 20px; }
 .section-header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; margin-bottom: 16px; }
+.compact-section-header { margin-bottom: 0; }
 .section-header h2, .section-header h3 { margin: 0 0 6px; }
 .section-header p, .muted { color: #667085; margin: 0; }
+.quality-banner { margin-top: 14px; padding: 14px 16px; border-radius: 14px; }
+.quality-banner.danger { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 
 .import-grid, .config-grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; }
 .drop-card, .paste-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px dashed #b9c4d8; border-radius: 16px; background: #f8fafc; }

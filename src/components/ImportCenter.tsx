@@ -4,6 +4,7 @@ import type { AppData, DuplicateDateMode, FieldMapping, ImportDraft } from '../l
 import { categories } from '../lib/defaults';
 
 export function ImportCenter({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
+  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState<ImportDraft | null>(null);
   const [pasteText, setPasteText] = useState('');
   const [duplicateMode, setDuplicateMode] = useState<DuplicateDateMode>('overwrite');
@@ -38,20 +39,22 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
 
   return (
     <section className="panel import-center">
-      <div className="section-header">
+      <div className="section-header compact-section-header">
         <div>
-          <h2>导入数据中心</h2>
-          <p>上传 Excel、粘贴表格或预览字段映射。重复“占比”列会按位置与前一个账户配对。</p>
+          <h2>导入数据</h2>
+          <p>默认只导入金额列；<code>占比</code> 列会自动忽略，用网页重算占比。</p>
         </div>
+        <button onClick={() => setExpanded(!expanded)}>{expanded || draft ? '收起导入区' : '展开导入区'}</button>
       </div>
 
+      {(expanded || draft) && <>
       <div className="help-card">
         <h3>导入格式说明</h3>
         <ul>
           <li>第一行必须是表头，第一列建议命名为 <code>时间</code>。</li>
-          <li>每个账户使用「账户金额列 + 紧随其后的 <code>占比</code> 列」，例如 <code>基金账户A</code> 后面跟一列 <code>占比</code>。</li>
-          <li><code>合计</code> 列可选；导入后会同时显示 Excel 原合计和网页重算合计。</li>
-          <li>金额支持 <code>1,234.56</code>、<code>￥1,234.56</code>、空值和 <code>-</code>；占比支持 <code>12.5%</code>。</li>
+          <li>每个账户只关注金额列；<code>占比</code> 列默认忽略，系统会按金额重新计算占比。</li>
+          <li><code>合计</code> 列可选；如果它不是总资产，请在字段映射里改成“忽略”。</li>
+          <li>金额支持 <code>1,234.56</code>、<code>￥1,234.56</code>、空值和 <code>-</code>。</li>
         </ul>
         <pre>{`时间\t基金账户A\t占比\t现金账户A\t占比\t合计
 2026-05-01\t59000\t34.3%\t10000\t5.8%\t69000`}</pre>
@@ -110,8 +113,7 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
                       <select value={mapping.role} onChange={(event) => updateMapping(mapping.columnIndex, { role: event.target.value as FieldMapping['role'] })}>
                         <option value="date">时间</option>
                         <option value="account">账户金额</option>
-                        <option value="ratio">占比</option>
-                        <option value="total">合计</option>
+                                                <option value="total">合计</option>
                         <option value="ignore">忽略</option>
                       </select>
                     </td>
@@ -137,6 +139,7 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
           )}
         </div>
       )}
+      </>}
     </section>
   );
 }

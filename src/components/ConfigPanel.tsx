@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import type { AccountConfig, AppData, AssetCategory } from '../lib/types';
 import { applyAccountsToSnapshots } from '../lib/calculations';
 import { categories } from '../lib/defaults';
 
 export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
+  const [expanded, setExpanded] = useState(false);
   function updateAccount(id: string, patch: Partial<AccountConfig>) {
     const accounts = data.accounts.map((account) => account.id === id ? { ...account, ...patch } : account);
     onChange({ ...data, accounts, snapshots: applyAccountsToSnapshots(data.snapshots, accounts) });
@@ -22,7 +24,14 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
 
   return (
     <section className="panel config-panel">
-      <div className="config-grid">
+      <div className="section-header compact-section-header">
+        <div>
+          <h2>账户与汇率配置</h2>
+          <p>{data.accounts.length} 个账户 · {Object.keys(data.defaultExchangeRates).length} 个默认币种</p>
+        </div>
+        <button onClick={() => setExpanded(!expanded)}>{expanded ? '收起配置' : '展开配置'}</button>
+      </div>
+      {expanded && <div className="config-grid">
         <div>
           <div className="section-header">
             <div>
@@ -77,7 +86,7 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
             ))}
           </div>
         </div>
-      </div>
+      </div>}
     </section>
   );
 }

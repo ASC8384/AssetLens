@@ -1,5 +1,6 @@
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { accountChanges, categoryTotals, ratioAlerts, totalChange } from '../lib/calculations';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { accountChanges, categoryTotals, totalChange } from '../lib/calculations';
+import { categoryTrendData, totalQuality } from '../lib/dashboard';
 import { categories, categoryColors } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
 import type { AppData } from '../lib/types';
@@ -10,9 +11,9 @@ export function Dashboard({ data }: { data: AppData }) {
   const change = totalChange(snapshots);
   const totals = categoryTotals(latest, data.accounts);
   const categoryData = categories.map((category) => ({ name: category, value: totals[category] })).filter((item) => item.value > 0);
-  const trendData = snapshots.map((snapshot) => ({ date: snapshot.date, total: snapshot.computedTotalCny, ...categoryTotals(snapshot, data.accounts) }));
+  const trendData = categoryTrendData(data);
   const topChanges = accountChanges(snapshots);
-  const alerts = ratioAlerts(latest).slice(0, 6);
+  const quality = totalQuality(latest);
 
   if (!latest) {
     return <EmptyState />;
@@ -21,21 +22,31 @@ export function Dashboard({ data }: { data: AppData }) {
   return (
     <section className="dashboard">
       <div className="metric-grid">
-        <Metric title="最新总资产" value={formatMoney(latest.excelTotal ?? latest.computedTotalCny)} hint="Excel 原合计优先展示" />
-        <Metric title="折算人民币总资产" value={formatMoney(latest.computedTotalCny)} hint={latest.date} />
+        <Metric title="网页重算总资产" value={formatMoney(latest.computedTotalCny)} hint={latest.date} />
+        <Metric title="Excel 原合计" value={formatMoney(latest.excelTotal)} hint="仅作为导入对照" tone={quality.status === 'danger' ? 'negative' : undefined} />
         <Metric title="较上一期变化" value={formatMoney(change.amount)} hint="金额变化" tone={(change.amount ?? 0) >= 0 ? 'positive' : 'negative'} />
         <Metric title="较上一期变化率" value={formatPercent(change.percent)} hint="百分比变化" tone={(change.percent ?? 0) >= 0 ? 'positive' : 'negative'} />
       </div>
 
+      {quality.status === 'danger' && (
+        <div className="quality-banner danger">
+          <strong>合计列可能识别错：</strong>{quality.message} 当前差异 {formatMoney(quality.diff)}，建议在导入映射里把“合计”改成“忽略”或修正数据源。
+        </div>
+      )}
+
       <div className="chart-grid main-charts">
-        <ChartCard title="总资产趋势">
+        <ChartCard title="总资产趋势（含分资产）">
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
-              <YAxis />
+              <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
               <Tooltip formatter={(value) => formatMoney(Number(value))} />
-              <Line type="monotone" dataKey="total" name="总资产" stroke="#2563eb" strokeWidth={3} dot={{ r: 3 }} />
+              <Legend />
+              <Line type="monotone" dataKey="total" name="总资产" stroke="#0f172a" strokeWidth={3} dot={{ r: 3 }} />
+              {categories.map((category) => (
+                <Line key={category} type="monotone" dataKey={category} name={category} stroke={categoryColors[category]} strokeWidth={2} dot={false} />
+              ))}
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -61,8 +72,9 @@ export function Dashboard({ data }: { data: AppData }) {
             <AreaChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
-              <YAxis />
+              <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
               <Tooltip formatter={(value) => formatMoney(Number(value))} />
+              <Legend />
               {categories.map((category) => <Area key={category} type="monotone" dataKey={category} stackId="1" stroke={categoryColors[category]} fill={categoryColors[category]} />)}
             </AreaChart>
           </ResponsiveContainer>
@@ -80,14 +92,13 @@ export function Dashboard({ data }: { data: AppData }) {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="占比差异提醒">
+        <ChartCard title="导入质量提示">
           <div className="alert-list">
-            {alerts.length === 0 ? <p className="muted">暂无明显口径差异。</p> : alerts.map((entry) => (
-              <div key={entry.accountId} className={Math.abs(entry.ratioDiff ?? 0) >= 0.01 ? 'alert danger' : 'alert warning'}>
-                <strong>{entry.accountName}</strong>
-                <span>{formatPercent(entry.ratioDiff)}</span>
-              </div>
-            ))}
+            <div className={`alert ${quality.status === 'danger' ? 'danger' : 'warning'}`}>
+              <strong>{quality.status === 'danger' ? '合计差异过大' : '合计对照'}</strong>
+              <span>{formatMoney(quality.diff)}</span>
+            </div>
+            <p className="muted">占比列已默认忽略，页面中的占比全部由金额重新计算。</p>
           </div>
         </ChartCard>
       </div>

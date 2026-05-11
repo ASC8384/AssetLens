@@ -56,14 +56,11 @@ export function inferFieldMappings(parsed: ParsedTable): FieldMapping[] {
       return { columnIndex, header, role: 'total', import: true, sampleValues };
     }
     if (normalized === '占比') {
-      const previousAccount = findPreviousAccountColumn(parsed.headers, columnIndex);
       return {
         columnIndex,
         header,
-        role: previousAccount === null ? 'ignore' : 'ratio',
-        ratioForColumnIndex: previousAccount ?? undefined,
-        accountName: previousAccount === null ? undefined : parsed.headers[previousAccount],
-        import: previousAccount !== null,
+        role: 'ignore',
+        import: false,
         sampleValues,
       };
     }
