@@ -1,4 +1,7 @@
 .superpowers/
+.claude/
+.playwright-mcp/
 node_modules/
 dist/
 .DS_Store
+asset-lens-dashboard.png
