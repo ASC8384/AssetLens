@@ -20,6 +20,8 @@ button, .button-like {
 }
 button:hover, .button-like:hover { border-color: #2563eb; color: #2563eb; }
 button.primary { background: #2563eb; color: white; border-color: #2563eb; }
+button.danger-button { background: rgba(220,38,38,.18); color: #fee2e2; border-color: rgba(254,202,202,.55); }
+button.danger-button:hover { background: #dc2626; color: white; border-color: #dc2626; }
 input, select, textarea {
   border: 1px solid #d5dbea;
   border-radius: 8px;
@@ -62,6 +64,10 @@ input[type='file'] { display: none; }
 .import-grid, .config-grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; }
 .drop-card, .paste-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px dashed #b9c4d8; border-radius: 16px; background: #f8fafc; }
 .drop-card { justify-content: center; align-items: center; min-height: 150px; cursor: pointer; font-weight: 700; color: #2563eb; }
+.help-card { margin-bottom: 16px; padding: 16px; border-radius: 16px; background: #eef6ff; border: 1px solid #bfdbfe; color: #1e3a8a; }
+.help-card h3 { margin: 0 0 8px; }
+.help-card ul { margin: 0 0 12px; padding-left: 20px; }
+.help-card pre { margin: 0; overflow: auto; background: white; border: 1px solid #dbeafe; border-radius: 10px; padding: 12px; color: #172033; }
 .mapping-area { margin-top: 20px; }
 .preview-note { margin-top: 12px; color: #2563eb; font-weight: 700; }
 

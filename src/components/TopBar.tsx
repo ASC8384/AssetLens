@@ -1,5 +1,6 @@
 import type { AppData } from '../lib/types';
 import { createManualSnapshot } from '../lib/importers';
+import { createEmptyAppData } from '../lib/defaults';
 import { exportBackup, importBackup } from '../lib/storage';
 import { downloadText } from '../lib/format';
 import { createSampleData } from '../lib/sampleData';
@@ -20,6 +21,11 @@ export function TopBar({ data, onChange }: { data: AppData; onChange: (data: App
     onChange(importBackup(await file.text()));
   }
 
+  function clearData() {
+    if (!window.confirm('确定清空所有本地资产数据吗？建议先导出 JSON 备份。')) return;
+    onChange(createEmptyAppData());
+  }
+
   return (
     <header className="top-bar">
       <div>
@@ -34,6 +40,7 @@ export function TopBar({ data, onChange }: { data: AppData; onChange: (data: App
           <input type="file" accept="application/json,.json" onChange={(event) => void importJson(event.target.files?.[0] ?? null)} />
         </label>
         <button onClick={() => onChange(createSampleData())}>载入示例数据</button>
+        <button className="danger-button" onClick={clearData}>清空本地数据</button>
       </div>
     </header>
   );

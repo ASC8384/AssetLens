@@ -45,6 +45,18 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
         </div>
       </div>
 
+      <div className="help-card">
+        <h3>导入格式说明</h3>
+        <ul>
+          <li>第一行必须是表头，第一列建议命名为 <code>时间</code>。</li>
+          <li>每个账户使用「账户金额列 + 紧随其后的 <code>占比</code> 列」，例如 <code>基金账户A</code> 后面跟一列 <code>占比</code>。</li>
+          <li><code>合计</code> 列可选；导入后会同时显示 Excel 原合计和网页重算合计。</li>
+          <li>金额支持 <code>1,234.56</code>、<code>￥1,234.56</code>、空值和 <code>-</code>；占比支持 <code>12.5%</code>。</li>
+        </ul>
+        <pre>{`时间\t基金账户A\t占比\t现金账户A\t占比\t合计
+2026-05-01\t59000\t34.3%\t10000\t5.8%\t69000`}</pre>
+      </div>
+
       <div className="import-grid">
         <label className="drop-card">
           <span>上传 .xlsx 文件</span>
