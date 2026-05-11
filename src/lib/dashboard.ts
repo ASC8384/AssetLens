@@ -67,6 +67,33 @@ export function categoryTrendData(data: AppData): Array<Record<string, number | 
   }));
 }
 
+export function accountRankingRows(snapshot: AssetSnapshot): Array<{ accountName: string; amount: number }> {
+  return snapshot.entries
+    .filter((entry) => entry.includedInTotal && entry.amountCny !== null)
+    .map((entry) => ({ accountName: entry.accountName, amount: entry.amountCny ?? 0 }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
+export function riskTrendData(data: AppData): Array<{ date: string; risk: number; safe: number }> {
+  return data.snapshots.map((snapshot) => {
+    const totals = categoryTotals(snapshot, data.accounts);
+    return {
+      date: snapshot.date,
+      risk: totals['基金'] + totals['证券'],
+      safe: totals['现金'] + totals['银行卡'],
+    };
+  });
+}
+
+export function categoryChangeRows(previous: AssetSnapshot | undefined, selected: AssetSnapshot): Array<{ category: AssetCategory; change: number }> {
+  const previousTotals = previous ? categoryTotals(previous, []) : Object.fromEntries(categories.map((category) => [category, 0])) as Record<AssetCategory, number>;
+  const selectedTotals = categoryTotals(selected, []);
+  return categories.map((category) => ({
+    category,
+    change: selectedTotals[category] - previousTotals[category],
+  }));
+}
+
 export function hasImportedData(data: AppData): boolean {
   return data.snapshots.length > 0;
 }

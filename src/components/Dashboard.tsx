@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { accountChanges, categoryTotals, totalChange } from '../lib/calculations';
-import { categoryTrendData, dashboardSummary, selectedSnapshotContext, totalQuality } from '../lib/dashboard';
+import { accountRankingRows, categoryChangeRows, categoryTrendData, dashboardSummary, riskTrendData, selectedSnapshotContext, totalQuality } from '../lib/dashboard';
 import { categories, categoryColors } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
 import type { AppData } from '../lib/types';
@@ -10,18 +10,22 @@ export function Dashboard({ data }: { data: AppData }) {
   const snapshots = data.snapshots;
   const [selectedDate, setSelectedDate] = useState('');
   const { selected, previous } = selectedSnapshotContext(snapshots, selectedDate);
-  const comparisonSnapshots = previous && selected ? [previous, selected] : selected ? [selected] : [];
+  if (!selected) {
+    return <EmptyState />;
+  }
+
+  const comparisonSnapshots = previous ? [previous, selected] : [selected];
   const change = totalChange(comparisonSnapshots);
   const totals = categoryTotals(selected, data.accounts);
   const categoryData = categories.map((category) => ({ name: category, value: totals[category] })).filter((item) => item.value > 0);
   const trendData = categoryTrendData(data);
   const topChanges = accountChanges(comparisonSnapshots);
-  const summary = dashboardSummary({ ...data, snapshots: selected ? [selected] : [] });
+  const rankingRows = accountRankingRows(selected).slice(0, 8);
+  const riskRows = riskTrendData(data);
+  const categoryChanges = categoryChangeRows(previous, selected).filter((row) => row.change !== 0);
+  const comparisonLabel = previous ? `${previous.date} → ${selected.date}` : `${selected.date} 无前一期`;
+  const summary = dashboardSummary({ ...data, snapshots: [selected] });
   const quality = totalQuality(selected);
-
-  if (!selected) {
-    return <EmptyState />;
-  }
 
   return (
     <section className="dashboard">
@@ -91,7 +95,7 @@ export function Dashboard({ data }: { data: AppData }) {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="最新资产结构" className="structure-card">
+        <ChartCard title={`选中时点资产结构 · ${selected.date}`} className="structure-card">
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={92} paddingAngle={4}>
@@ -103,6 +107,47 @@ export function Dashboard({ data }: { data: AppData }) {
           <div className="legend-list">
             {categoryData.map((item) => <span key={item.name}><i style={{ background: categoryColors[item.name as keyof typeof categoryColors] }} />{item.name} {formatPercent(item.value / selected.computedTotalCny)}</span>)}
           </div>
+        </ChartCard>
+      </div>
+
+      <div className="chart-grid tertiary-charts">
+        <ChartCard title="现金 vs 风险资产趋势">
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={riskRows}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
+              <Tooltip formatter={(value) => formatMoney(Number(value))} />
+              <Legend />
+              <Area type="monotone" dataKey="safe" name="现金/银行卡" fill="#12b8a6" stroke="#12b8a6" fillOpacity={0.16} />
+              <Line type="monotone" dataKey="risk" name="基金/证券" stroke="#d9822b" strokeWidth={3} dot={false} />
+              <ReferenceLine x={selected.date} stroke="#d9822b" strokeDasharray="4 4" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title={`选中时点账户排行 · ${selected.date}`}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={rankingRows} layout="vertical" margin={{ left: 20, right: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis type="number" tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
+              <YAxis type="category" dataKey="accountName" width={92} />
+              <Tooltip formatter={(value) => formatMoney(Number(value))} />
+              <Bar dataKey="amount" name="账户金额" fill="#10233f" />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title={`大类结构变化 · ${comparisonLabel}`}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={categoryChanges} margin={{ left: 8, right: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="category" />
+              <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
+              <Tooltip formatter={(value) => formatMoney(Number(value))} />
+              <Bar dataKey="change" name="变化金额" fill="#2266ff" />
+            </BarChart>
+          </ResponsiveContainer>
         </ChartCard>
       </div>
 
@@ -120,7 +165,7 @@ export function Dashboard({ data }: { data: AppData }) {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="账户金额变化 Top 5">
+        <ChartCard title={`账户金额变化 Top 5 · ${comparisonLabel}`}>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={topChanges} layout="vertical" margin={{ left: 20, right: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />

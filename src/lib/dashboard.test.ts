@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryTrendData, dashboardSummary, selectedSnapshotContext } from './dashboard';
+import { accountRankingRows, categoryChangeRows, categoryTrendData, dashboardSummary, riskTrendData, selectedSnapshotContext } from './dashboard';
 import { recalculateSnapshot } from './calculations';
 import type { AppData, AssetSnapshot } from './types';
 
@@ -74,6 +74,42 @@ describe('dashboardSummary', () => {
       leaderAmount: 120,
       riskAssetRatio: 120 / 180,
     });
+  });
+});
+
+describe('dashboard chart helpers', () => {
+  it('returns selected snapshot account ranking rows', () => {
+    const current = snapshot('2026-02-01', 120, 60);
+
+    expect(accountRankingRows(current)).toEqual([
+      { accountName: '基金账户', amount: 120 },
+      { accountName: '现金账户', amount: 60 },
+    ]);
+  });
+
+  it('returns cash versus risk trend rows', () => {
+    const data: AppData = {
+      version: 1,
+      snapshots: [snapshot('2026-01-01', 100, 40), snapshot('2026-02-01', 120, 60)],
+      accounts: [],
+      defaultExchangeRates: { CNY: 1 },
+      preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
+    };
+
+    expect(riskTrendData(data)).toEqual([
+      expect.objectContaining({ date: '2026-01-01', risk: 100, safe: 40 }),
+      expect.objectContaining({ date: '2026-02-01', risk: 120, safe: 60 }),
+    ]);
+  });
+
+  it('returns category change rows between previous and selected snapshots', () => {
+    const previous = snapshot('2026-01-01', 100, 40);
+    const selected = snapshot('2026-02-01', 120, 60);
+
+    expect(categoryChangeRows(previous, selected)).toEqual(expect.arrayContaining([
+      { category: '基金', change: 20 },
+      { category: '现金', change: 20 },
+    ]));
   });
 });
 
