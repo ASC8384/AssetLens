@@ -21,6 +21,23 @@ export function totalQuality(snapshot: AssetSnapshot | undefined): TotalQuality 
   return { status: 'ok', diff, diffRatio, message: 'Excel 原合计和网页重算合计基本一致。' };
 }
 
+export type SelectedSnapshotContext = {
+  selected: AssetSnapshot | undefined;
+  previous: AssetSnapshot | undefined;
+  selectedIndex: number;
+};
+
+export function selectedSnapshotContext(snapshots: AssetSnapshot[], selectedDate: string): SelectedSnapshotContext {
+  if (snapshots.length === 0) return { selected: undefined, previous: undefined, selectedIndex: -1 };
+  const foundIndex = selectedDate ? snapshots.findIndex((snapshot) => snapshot.date === selectedDate) : -1;
+  const selectedIndex = foundIndex === -1 ? snapshots.length - 1 : foundIndex;
+  return {
+    selected: snapshots[selectedIndex],
+    previous: selectedIndex > 0 ? snapshots[selectedIndex - 1] : undefined,
+    selectedIndex,
+  };
+}
+
 export type DashboardSummary = {
   leaderCategory: AssetCategory | null;
   leaderAmount: number;

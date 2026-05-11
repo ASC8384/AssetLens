@@ -1,22 +1,25 @@
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useState } from 'react';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { accountChanges, categoryTotals, totalChange } from '../lib/calculations';
-import { categoryTrendData, dashboardSummary, totalQuality } from '../lib/dashboard';
+import { categoryTrendData, dashboardSummary, selectedSnapshotContext, totalQuality } from '../lib/dashboard';
 import { categories, categoryColors } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
 import type { AppData } from '../lib/types';
 
 export function Dashboard({ data }: { data: AppData }) {
   const snapshots = data.snapshots;
-  const latest = snapshots[snapshots.length - 1];
-  const change = totalChange(snapshots);
-  const totals = categoryTotals(latest, data.accounts);
+  const [selectedDate, setSelectedDate] = useState('');
+  const { selected, previous } = selectedSnapshotContext(snapshots, selectedDate);
+  const comparisonSnapshots = previous && selected ? [previous, selected] : selected ? [selected] : [];
+  const change = totalChange(comparisonSnapshots);
+  const totals = categoryTotals(selected, data.accounts);
   const categoryData = categories.map((category) => ({ name: category, value: totals[category] })).filter((item) => item.value > 0);
   const trendData = categoryTrendData(data);
-  const topChanges = accountChanges(snapshots);
-  const summary = dashboardSummary(data);
-  const quality = totalQuality(latest);
+  const topChanges = accountChanges(comparisonSnapshots);
+  const summary = dashboardSummary({ ...data, snapshots: selected ? [selected] : [] });
+  const quality = totalQuality(selected);
 
-  if (!latest) {
+  if (!selected) {
     return <EmptyState />;
   }
 
@@ -25,8 +28,8 @@ export function Dashboard({ data }: { data: AppData }) {
       <div className="dashboard-hero dashboard-hero-v2">
         <div className="hero-copy">
           <span className="eyebrow">PORTFOLIO RADAR</span>
-          <h2>{formatMoney(latest.computedTotalCny)}</h2>
-          <p>最新净资产 · {latest.date}</p>
+          <h2>{formatMoney(selected.computedTotalCny)}</h2>
+          <p>{selectedDate ? '选中时点' : '最新净资产'} · {selected.date}</p>
         </div>
         <div className="hero-orbit" aria-hidden="true">
           <span className="orbit-ring ring-one" />
@@ -42,6 +45,15 @@ export function Dashboard({ data }: { data: AppData }) {
         </div>
       </div>
 
+      <div className="dashboard-timebar">
+        <label>查看时间节点
+          <select value={selected?.date ?? ''} onChange={(event) => setSelectedDate(event.target.value)}>
+            {snapshots.map((snapshot) => <option key={snapshot.id} value={snapshot.date}>{snapshot.date}</option>)}
+          </select>
+        </label>
+        <button onClick={() => setSelectedDate(snapshots[snapshots.length - 1]?.date ?? '')}>跳到最新</button>
+      </div>
+
       <div className="insight-strip">
         <div><span>主导资产</span><strong>{summary.leaderCategory ?? '—'}</strong><small>{formatMoney(summary.leaderAmount)}</small></div>
         <div><span>风险资产</span><strong>{formatPercent(summary.riskAssetRatio)}</strong><small>基金 + 证券</small></div>
@@ -49,8 +61,8 @@ export function Dashboard({ data }: { data: AppData }) {
       </div>
 
       <div className="metric-grid">
-        <Metric title="网页重算总资产" value={formatMoney(latest.computedTotalCny)} hint={latest.date} />
-        <Metric title="Excel 原合计" value={formatMoney(latest.excelTotal)} hint="仅作为导入对照" tone={quality.status === 'danger' ? 'negative' : undefined} />
+        <Metric title="网页重算总资产" value={formatMoney(selected.computedTotalCny)} hint={selected.date} />
+        <Metric title="Excel 原合计" value={formatMoney(selected.excelTotal)} hint="仅作为导入对照" tone={quality.status === 'danger' ? 'negative' : undefined} />
         <Metric title="较上一期变化" value={formatMoney(change.amount)} hint="金额变化" tone={(change.amount ?? 0) >= 0 ? 'positive' : 'negative'} />
         <Metric title="较上一期变化率" value={formatPercent(change.percent)} hint="百分比变化" tone={(change.percent ?? 0) >= 0 ? 'positive' : 'negative'} />
       </div>
@@ -74,6 +86,7 @@ export function Dashboard({ data }: { data: AppData }) {
               {categories.map((category) => (
                 <Line key={category} type="monotone" dataKey={category} name={category} stroke={categoryColors[category]} strokeWidth={2} dot={false} />
               ))}
+              <ReferenceLine x={selected.date} stroke="#d9822b" strokeDasharray="4 4" label="选中" />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -88,7 +101,7 @@ export function Dashboard({ data }: { data: AppData }) {
             </PieChart>
           </ResponsiveContainer>
           <div className="legend-list">
-            {categoryData.map((item) => <span key={item.name}><i style={{ background: categoryColors[item.name as keyof typeof categoryColors] }} />{item.name} {formatPercent(item.value / latest.computedTotalCny)}</span>)}
+            {categoryData.map((item) => <span key={item.name}><i style={{ background: categoryColors[item.name as keyof typeof categoryColors] }} />{item.name} {formatPercent(item.value / selected.computedTotalCny)}</span>)}
           </div>
         </ChartCard>
       </div>

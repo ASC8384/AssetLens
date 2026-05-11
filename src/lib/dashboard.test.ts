@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryTrendData, dashboardSummary } from './dashboard';
+import { categoryTrendData, dashboardSummary, selectedSnapshotContext } from './dashboard';
 import { recalculateSnapshot } from './calculations';
 import type { AppData, AssetSnapshot } from './types';
 
@@ -39,6 +39,25 @@ function snapshot(date: string, fund: number, cash: number): AssetSnapshot {
     ],
   });
 }
+
+describe('selectedSnapshotContext', () => {
+  it('returns selected snapshot and previous snapshot for point-in-time dashboard', () => {
+    const snapshots = [snapshot('2026-01-01', 100, 40), snapshot('2026-02-01', 120, 60), snapshot('2026-03-01', 160, 80)];
+
+    expect(selectedSnapshotContext(snapshots, '2026-02-01')).toMatchObject({
+      selected: expect.objectContaining({ date: '2026-02-01' }),
+      previous: expect.objectContaining({ date: '2026-01-01' }),
+      selectedIndex: 1,
+    });
+  });
+
+  it('falls back to latest snapshot when selected date is empty or missing', () => {
+    const snapshots = [snapshot('2026-01-01', 100, 40), snapshot('2026-02-01', 120, 60)];
+
+    expect(selectedSnapshotContext(snapshots, '').selected?.date).toBe('2026-02-01');
+    expect(selectedSnapshotContext(snapshots, 'missing').selected?.date).toBe('2026-02-01');
+  });
+});
 
 describe('dashboardSummary', () => {
   it('returns latest category leader and risk asset ratio', () => {
