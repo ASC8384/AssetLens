@@ -28,8 +28,10 @@ export default function App() {
   return (
     <div className="app-shell">
       <TopBar data={data} onChange={updateData} />
-      <ImportCenter data={data} onChange={updateData} />
-      <ConfigPanel data={data} onChange={updateData} />
+      <div className="control-strip">
+        <ImportCenter data={data} onChange={updateData} />
+        <ConfigPanel data={data} onChange={updateData} />
+      </div>
 
       <nav className="tabs">
         <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>仪表盘</button>

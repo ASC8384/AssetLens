@@ -28,7 +28,8 @@ export function TopBar({ data, onChange }: { data: AppData; onChange: (data: App
 
   return (
     <header className="top-bar">
-      <div>
+      <div className="brand-block">
+        <span className="eyebrow">LOCAL ASSET COMMAND</span>
         <h1>AssetLens</h1>
         <p>{data.snapshots.length} 期记录 · {data.accounts.length} 个账户 · 数据仅保存在本地浏览器</p>
       </div>

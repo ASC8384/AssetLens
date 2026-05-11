@@ -21,6 +21,19 @@ export function Dashboard({ data }: { data: AppData }) {
 
   return (
     <section className="dashboard">
+      <div className="dashboard-hero">
+        <div>
+          <span className="eyebrow">PORTFOLIO RADAR</span>
+          <h2>{formatMoney(latest.computedTotalCny)}</h2>
+          <p>最新净资产 · {latest.date}</p>
+        </div>
+        <div className="hero-delta">
+          <span>较上一期</span>
+          <strong className={(change.amount ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(change.amount)}</strong>
+          <small>{formatPercent(change.percent)}</small>
+        </div>
+      </div>
+
       <div className="metric-grid">
         <Metric title="网页重算总资产" value={formatMoney(latest.computedTotalCny)} hint={latest.date} />
         <Metric title="Excel 原合计" value={formatMoney(latest.excelTotal)} hint="仅作为导入对照" tone={quality.status === 'danger' ? 'negative' : undefined} />
