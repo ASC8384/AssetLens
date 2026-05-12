@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { accountChanges, categoryTotals, totalChange } from '../lib/calculations';
-import { accountRankingRows, categoryChangeRows, categoryTrendData, dashboardSummary, riskTrendData, selectedSnapshotContext, totalQuality } from '../lib/dashboard';
+import { accountRankingRows, categoryChangeRows, categoryTrendData, dashboardSummary, riskTrendData, selectedSnapshotContext } from '../lib/dashboard';
 import { categories, categoryColors } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
 import type { AppData } from '../lib/types';
@@ -25,7 +25,6 @@ export function Dashboard({ data }: { data: AppData }) {
   const categoryChanges = categoryChangeRows(previous, selected).filter((row) => row.change !== 0);
   const comparisonLabel = previous ? `${previous.date} → ${selected.date}` : `${selected.date} 无前一期`;
   const summary = dashboardSummary({ ...data, snapshots: [selected] });
-  const quality = totalQuality(selected);
 
   return (
     <section className="dashboard">
@@ -61,21 +60,15 @@ export function Dashboard({ data }: { data: AppData }) {
       <div className="insight-strip">
         <div><span>主导资产</span><strong>{summary.leaderCategory ?? '—'}</strong><small>{formatMoney(summary.leaderAmount)}</small></div>
         <div><span>风险资产</span><strong>{formatPercent(summary.riskAssetRatio)}</strong><small>基金 + 证券</small></div>
-        <div><span>数据质量</span><strong>{quality.status === 'danger' ? '需检查' : '正常'}</strong><small>{quality.message}</small></div>
+        <div><span>选中时点</span><strong>{selected.date}</strong><small>{previous ? `对比 ${previous.date}` : '暂无前一期'}</small></div>
       </div>
 
       <div className="metric-grid">
         <Metric title="网页重算总资产" value={formatMoney(selected.computedTotalCny)} hint={selected.date} />
-        <Metric title="Excel 原合计" value={formatMoney(selected.excelTotal)} hint="仅作为导入对照" tone={quality.status === 'danger' ? 'negative' : undefined} />
+        <Metric title="资产账户数" value={`${selected.entries.length}`} hint="当前时点账户数量" />
         <Metric title="较上一期变化" value={formatMoney(change.amount)} hint="金额变化" tone={(change.amount ?? 0) >= 0 ? 'positive' : 'negative'} />
         <Metric title="较上一期变化率" value={formatPercent(change.percent)} hint="百分比变化" tone={(change.percent ?? 0) >= 0 ? 'positive' : 'negative'} />
       </div>
-
-      {quality.status === 'danger' && (
-        <div className="quality-banner danger">
-          <strong>合计列可能识别错：</strong>{quality.message} 当前差异 {formatMoney(quality.diff)}，建议在导入映射里把“合计”改成“忽略”或修正数据源。
-        </div>
-      )}
 
       <div className="chart-grid main-charts dashboard-feature-grid">
         <ChartCard title="总资产趋势（含分资产）" className="feature-chart">
@@ -175,16 +168,6 @@ export function Dashboard({ data }: { data: AppData }) {
               <Bar dataKey="change" name="变化金额" fill="#2563eb" />
             </BarChart>
           </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title="导入质量提示">
-          <div className="alert-list">
-            <div className={`alert ${quality.status === 'danger' ? 'danger' : 'warning'}`}>
-              <strong>{quality.status === 'danger' ? '合计差异过大' : '合计对照'}</strong>
-              <span>{formatMoney(quality.diff)}</span>
-            </div>
-            <p className="muted">占比列已默认忽略，页面中的占比全部由金额重新计算。</p>
-          </div>
         </ChartCard>
       </div>
     </section>
