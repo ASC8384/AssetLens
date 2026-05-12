@@ -2,6 +2,7 @@ import type { AppData, AssetCategory, AssetSnapshot } from './types';
 import { accountChanges, categoryTotals } from './calculations';
 import { categories } from './defaults';
 import { formatMoney, formatPercent } from './format';
+import { analyzeStrategy } from './strategy';
 
 export type ReportMode = 'endpoint' | 'periodic';
 
@@ -50,6 +51,7 @@ export function generateMarkdownReport(data: AppData, startDate: string, endDate
   const largestIncrease = accountDiffs[0];
   const largestDecrease = [...accountDiffs].reverse()[0];
   const contributionRows = accountContributionRows(first, last).slice(0, 8);
+  const strategy = analyzeStrategy(last, data.strategy);
 
   return [
     `# 资产复盘报告（${first.date} 至 ${last.date}）`,
@@ -70,6 +72,9 @@ export function generateMarkdownReport(data: AppData, startDate: string, endDate
     '',
     '## 账户贡献榜',
     ...contributionRows.map((row) => `- ${row.accountName}：${formatMoney(row.change)}`),
+    '',
+    '## 策略偏离提示',
+    ...(strategy.suggestions.length > 0 ? strategy.suggestions.map((item) => `- ${item}`) : ['- 当前资产结构落在策略目标内。']),
     '',
     periodicSummary(snapshots, mode),
   ].join('\n');

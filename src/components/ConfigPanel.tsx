@@ -22,6 +22,24 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
     onChange({ ...data, defaultExchangeRates: { ...data.defaultExchangeRates, [currency]: data.defaultExchangeRates[currency] ?? 1 } });
   }
 
+  function updateStrategyNumber(key: 'cashReserveTarget' | 'riskAssetMinRatio' | 'riskAssetMaxRatio', value: string) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return;
+    onChange({ ...data, strategy: { ...data.strategy, [key]: key === 'cashReserveTarget' ? number : number / 100 } });
+  }
+
+  function updateTargetRatio(category: AssetCategory, value: string) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return;
+    onChange({
+      ...data,
+      strategy: {
+        ...data.strategy,
+        targetCategoryRatios: { ...data.strategy.targetCategoryRatios, [category]: number / 100 },
+      },
+    });
+  }
+
   return (
     <section className="panel config-panel">
       <div className="section-header compact-section-header">
@@ -69,21 +87,40 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
           </div>
         </div>
 
-        <div>
-          <div className="section-header">
-            <div>
-              <h2>全局默认汇率</h2>
-              <p>新增记录时使用；每期仍可单独修改。</p>
+        <div className="config-stack">
+          <div>
+            <div className="section-header">
+              <div>
+                <h2>全局默认汇率</h2>
+                <p>新增记录时使用；每期仍可单独修改。</p>
+              </div>
+              <button onClick={addCurrency}>新增币种</button>
             </div>
-            <button onClick={addCurrency}>新增币种</button>
+            <div className="rate-list">
+              {Object.entries(data.defaultExchangeRates).map(([currency, rate]) => (
+                <label key={currency}>
+                  <span>{currency}</span>
+                  <input type="number" step="0.0001" value={rate} onChange={(event) => updateDefaultRate(currency, event.target.value)} disabled={currency === 'CNY'} />
+                </label>
+              ))}
+            </div>
           </div>
-          <div className="rate-list">
-            {Object.entries(data.defaultExchangeRates).map(([currency, rate]) => (
-              <label key={currency}>
-                <span>{currency}</span>
-                <input type="number" step="0.0001" value={rate} onChange={(event) => updateDefaultRate(currency, event.target.value)} disabled={currency === 'CNY'} />
-              </label>
-            ))}
+
+          <div>
+            <div className="section-header">
+              <div>
+                <h2>资产策略</h2>
+                <p>用于仪表盘策略雷达和复盘提示。</p>
+              </div>
+            </div>
+            <div className="rate-list strategy-list">
+              <label><span>现金安全垫</span><input type="number" value={data.strategy.cashReserveTarget} onChange={(event) => updateStrategyNumber('cashReserveTarget', event.target.value)} /></label>
+              <label><span>风险下限%</span><input type="number" value={Math.round(data.strategy.riskAssetMinRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMinRatio', event.target.value)} /></label>
+              <label><span>风险上限%</span><input type="number" value={Math.round(data.strategy.riskAssetMaxRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMaxRatio', event.target.value)} /></label>
+              {categories.map((category) => (
+                <label key={category}><span>{category}目标%</span><input type="number" value={Math.round((data.strategy.targetCategoryRatios[category] ?? 0) * 100)} onChange={(event) => updateTargetRatio(category, event.target.value)} /></label>
+              ))}
+            </div>
           </div>
         </div>
       </div>}

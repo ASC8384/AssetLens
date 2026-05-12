@@ -21,6 +21,12 @@ const data: AppData = {
   snapshots: [snapshot('2026-01-01', 100, 50), snapshot('2026-02-01', 180, 30), snapshot('2026-04-01', 160, 90)],
   accounts: [],
   defaultExchangeRates: { CNY: 1 },
+  strategy: {
+    cashReserveTarget: 100,
+    riskAssetMinRatio: 0.2,
+    riskAssetMaxRatio: 0.7,
+    targetCategoryRatios: { 基金: 0.4, 现金: 0.2 },
+  },
   preferences: { activeTab: 'report', detailMode: 'compact', categoryFilter: '全部' },
 };
 

@@ -66,6 +66,7 @@ describe('dashboardSummary', () => {
       snapshots: [snapshot('2026-01-01', 100, 40), snapshot('2026-02-01', 120, 60)],
       accounts: [],
       defaultExchangeRates: { CNY: 1 },
+      strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
       preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
     };
 
@@ -93,6 +94,7 @@ describe('dashboard chart helpers', () => {
       snapshots: [snapshot('2026-01-01', 100, 40), snapshot('2026-02-01', 120, 60)],
       accounts: [],
       defaultExchangeRates: { CNY: 1 },
+      strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
       preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
     };
 
@@ -120,6 +122,7 @@ describe('categoryTrendData', () => {
       snapshots: [snapshot('2026-01-01', 100, 40), snapshot('2026-02-01', 120, 60)],
       accounts: [],
       defaultExchangeRates: { CNY: 1 },
+      strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
       preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
     };
 

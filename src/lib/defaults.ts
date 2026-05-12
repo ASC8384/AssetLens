@@ -1,4 +1,5 @@
 import type { AccountConfig, AppData, AssetCategory } from './types';
+import { createDefaultStrategyConfig } from './strategy';
 
 export const categories: AssetCategory[] = ['基金', '现金', '证券', '银行卡', '杂项'];
 
@@ -60,6 +61,7 @@ export function createEmptyAppData(): AppData {
     snapshots: [],
     accounts: [],
     defaultExchangeRates,
+    strategy: createDefaultStrategyConfig(),
     preferences: {
       activeTab: 'dashboard',
       detailMode: 'compact',

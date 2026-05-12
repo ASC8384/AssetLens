@@ -32,11 +32,19 @@ export type AssetSnapshot = {
   computedTotalCny: number;
 };
 
+export type StrategyConfig = {
+  cashReserveTarget: number;
+  riskAssetMinRatio: number;
+  riskAssetMaxRatio: number;
+  targetCategoryRatios: Partial<Record<AssetCategory, number>>;
+};
+
 export type AppData = {
   version: 1;
   snapshots: AssetSnapshot[];
   accounts: AccountConfig[];
   defaultExchangeRates: Record<string, number>;
+  strategy: StrategyConfig;
   preferences: {
     activeTab: 'dashboard' | 'details' | 'report';
     detailMode: 'compact' | 'analysis';
