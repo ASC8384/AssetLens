@@ -5,6 +5,7 @@ import { DetailsTable } from './components/DetailsTable';
 import { ImportCenter } from './components/ImportCenter';
 import { ReviewReport } from './components/ReviewReport';
 import { TopBar } from './components/TopBar';
+import { StrategyPanel } from './components/StrategyPanel';
 import { loadAppData, saveAppData } from './lib/storage';
 import { createSampleData } from './lib/sampleData';
 import type { AppData } from './lib/types';
@@ -41,8 +42,9 @@ export default function App() {
         </section>
       )}
 
-      <div className="control-strip">
+      <div className="control-strip three-column-controls">
         <ImportCenter data={data} onChange={updateData} />
+        <StrategyPanel data={data} onChange={updateData} />
         <ConfigPanel data={data} onChange={updateData} />
       </div>
 

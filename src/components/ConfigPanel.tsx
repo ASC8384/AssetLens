@@ -22,24 +22,6 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
     onChange({ ...data, defaultExchangeRates: { ...data.defaultExchangeRates, [currency]: data.defaultExchangeRates[currency] ?? 1 } });
   }
 
-  function updateStrategyNumber(key: 'cashReserveTarget' | 'riskAssetMinRatio' | 'riskAssetMaxRatio', value: string) {
-    const number = Number(value);
-    if (!Number.isFinite(number)) return;
-    onChange({ ...data, strategy: { ...data.strategy, [key]: key === 'cashReserveTarget' ? number : number / 100 } });
-  }
-
-  function updateTargetRatio(category: AssetCategory, value: string) {
-    const number = Number(value);
-    if (!Number.isFinite(number)) return;
-    onChange({
-      ...data,
-      strategy: {
-        ...data.strategy,
-        targetCategoryRatios: { ...data.strategy.targetCategoryRatios, [category]: number / 100 },
-      },
-    });
-  }
-
   return (
     <section className="panel config-panel">
       <div className="section-header compact-section-header">
@@ -102,23 +84,6 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
                   <span>{currency}</span>
                   <input type="number" step="0.0001" value={rate} onChange={(event) => updateDefaultRate(currency, event.target.value)} disabled={currency === 'CNY'} />
                 </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="section-header">
-              <div>
-                <h2>资产策略</h2>
-                <p>这是可自定义的目标参数，会影响仪表盘策略雷达和复盘报告。默认值只是起点，你可以按自己的风险偏好修改。</p>
-              </div>
-            </div>
-            <div className="rate-list strategy-list">
-              <label><span>应急备用金目标<small>现金 + 银行卡至少保留的金额</small></span><input type="number" value={data.strategy.cashReserveTarget} onChange={(event) => updateStrategyNumber('cashReserveTarget', event.target.value)} /></label>
-              <label><span>风险资产下限%<small>基金 + 证券占总资产的最低比例</small></span><input type="number" value={Math.round(data.strategy.riskAssetMinRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMinRatio', event.target.value)} /></label>
-              <label><span>风险资产上限%<small>基金 + 证券占总资产的最高比例</small></span><input type="number" value={Math.round(data.strategy.riskAssetMaxRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMaxRatio', event.target.value)} /></label>
-              {categories.map((category) => (
-                <label key={category}><span>{category}目标占比%<small>期望该大类占总资产的比例</small></span><input type="number" value={Math.round((data.strategy.targetCategoryRatios[category] ?? 0) * 100)} onChange={(event) => updateTargetRatio(category, event.target.value)} /></label>
               ))}
             </div>
           </div>
