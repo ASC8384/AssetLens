@@ -200,7 +200,7 @@ code { color: var(--blue); }
 .negative { color: var(--danger); }
 .chart-grid { display: grid; gap: 16px; margin-top: 16px; }
 .main-charts { grid-template-columns: 2fr 1fr; }
-.secondary-charts { grid-template-columns: 1.3fr 1fr 1fr; }
+.secondary-charts { grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr); }
 .tertiary-charts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .chart-card { padding: 20px; min-width: 0; }
 .chart-card h3 { margin: 0 0 14px; font-family: 'DM Serif Display', Georgia, serif; font-size: 24px; font-weight: 400; color: var(--navy); }
