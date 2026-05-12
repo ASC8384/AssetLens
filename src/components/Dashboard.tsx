@@ -68,7 +68,7 @@ export function Dashboard({ data }: { data: AppData }) {
       <div className="strategy-radar chart-card">
         <div>
           <h3>策略雷达</h3>
-          <p>现金安全垫：{strategy.cashReserveGap >= 0 ? '已达标' : `缺口 ${formatMoney(Math.abs(strategy.cashReserveGap))}`} · 风险资产：{strategy.riskStatus === 'above' ? '高于上限' : strategy.riskStatus === 'below' ? '低于下限' : '目标区间内'}</p>
+          <p>应急备用金：{strategy.cashReserveGap >= 0 ? '已达标' : `缺口 ${formatMoney(Math.abs(strategy.cashReserveGap))}`} · 风险资产：{strategy.riskStatus === 'above' ? '高于上限' : strategy.riskStatus === 'below' ? '低于下限' : '目标区间内'}</p>
         </div>
         <ul>
           {(strategy.suggestions.length > 0 ? strategy.suggestions : ['当前资产结构落在策略目标内。']).slice(0, 4).map((item) => <li key={item}>{item}</li>)}

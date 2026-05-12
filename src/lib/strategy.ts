@@ -40,7 +40,7 @@ export function analyzeStrategy(snapshot: AssetSnapshot, config: StrategyConfig)
     return { category: typedCategory, currentRatio, targetRatio: targetRatio ?? 0, drift: currentRatio - (targetRatio ?? 0) };
   });
   const suggestions: string[] = [];
-  if (cashReserveGap < 0) suggestions.push(`现金低于安全垫目标 ${formatMoney(Math.abs(cashReserveGap))}`);
+  if (cashReserveGap < 0) suggestions.push(`应急备用金低于目标 ${formatMoney(Math.abs(cashReserveGap))}`);
   if (riskStatus === 'above' && riskAssetRatio !== null) suggestions.push(`风险资产占比高于上限 ${formatPercent(riskAssetRatio - config.riskAssetMaxRatio)}百分点`);
   if (riskStatus === 'below' && riskAssetRatio !== null) suggestions.push(`风险资产占比低于下限 ${formatPercent(config.riskAssetMinRatio - riskAssetRatio)}百分点`);
   for (const drift of categoryDrifts.filter((item) => Math.abs(item.drift) >= 0.05)) {

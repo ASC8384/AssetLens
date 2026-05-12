@@ -110,15 +110,15 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
             <div className="section-header">
               <div>
                 <h2>资产策略</h2>
-                <p>用于仪表盘策略雷达和复盘提示。</p>
+                <p>这是可自定义的目标参数，会影响仪表盘策略雷达和复盘报告。默认值只是起点，你可以按自己的风险偏好修改。</p>
               </div>
             </div>
             <div className="rate-list strategy-list">
-              <label><span>现金安全垫</span><input type="number" value={data.strategy.cashReserveTarget} onChange={(event) => updateStrategyNumber('cashReserveTarget', event.target.value)} /></label>
-              <label><span>风险下限%</span><input type="number" value={Math.round(data.strategy.riskAssetMinRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMinRatio', event.target.value)} /></label>
-              <label><span>风险上限%</span><input type="number" value={Math.round(data.strategy.riskAssetMaxRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMaxRatio', event.target.value)} /></label>
+              <label><span>应急备用金目标<small>现金 + 银行卡至少保留的金额</small></span><input type="number" value={data.strategy.cashReserveTarget} onChange={(event) => updateStrategyNumber('cashReserveTarget', event.target.value)} /></label>
+              <label><span>风险资产下限%<small>基金 + 证券占总资产的最低比例</small></span><input type="number" value={Math.round(data.strategy.riskAssetMinRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMinRatio', event.target.value)} /></label>
+              <label><span>风险资产上限%<small>基金 + 证券占总资产的最高比例</small></span><input type="number" value={Math.round(data.strategy.riskAssetMaxRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMaxRatio', event.target.value)} /></label>
               {categories.map((category) => (
-                <label key={category}><span>{category}目标%</span><input type="number" value={Math.round((data.strategy.targetCategoryRatios[category] ?? 0) * 100)} onChange={(event) => updateTargetRatio(category, event.target.value)} /></label>
+                <label key={category}><span>{category}目标占比%<small>期望该大类占总资产的比例</small></span><input type="number" value={Math.round((data.strategy.targetCategoryRatios[category] ?? 0) * 100)} onChange={(event) => updateTargetRatio(category, event.target.value)} /></label>
               ))}
             </div>
           </div>

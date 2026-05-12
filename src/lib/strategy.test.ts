@@ -25,7 +25,7 @@ describe('strategy analysis', () => {
     expect(result.cashReserveGap).toBe(-20000);
     expect(result.riskAssetRatio).toBe(0.9);
     expect(result.riskStatus).toBe('above');
-    expect(result.suggestions).toContain('现金低于安全垫目标 ¥20,000.00');
+    expect(result.suggestions).toContain('应急备用金低于目标 ¥20,000.00');
     expect(result.suggestions.some((item) => item.startsWith('风险资产占比高于上限'))).toBe(true);
   });
 });

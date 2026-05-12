@@ -219,6 +219,8 @@ th.sticky-col { background: #f4efe6; z-index: 3; }
 .row-actions { display: flex; gap: 8px; }
 .rate-list { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 12px; }
 .rate-list label, .rate-editor label { display: flex; gap: 8px; align-items: center; color: #475467; }
+.rate-list label span { display: grid; gap: 2px; }
+.rate-list label small { color: #8a6f54; font-size: 12px; }
 .rate-list input, .rate-editor input { width: 110px; }
 .rate-editor { display: grid; gap: 6px; }
 .secondary-action { margin-top: 12px; }
