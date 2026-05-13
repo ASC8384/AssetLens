@@ -10,7 +10,7 @@ describe('FireView', () => {
     expect(screen.getByText('FIRE TRACKER')).toBeTruthy();
     expect(screen.getByText('FIRE 仪表盘')).toBeTruthy();
     expect(screen.getByText('FIRE 设置')).toBeTruthy();
-    expect(screen.getByText('进度环')).toBeTruthy();
+    expect(screen.queryByText('进度环')).toBeNull();
     expect(screen.getByText('FIRE 航线')).toBeTruthy();
     expect(screen.getByText('目标资产')).toBeTruthy();
     expect(screen.getByText('当前进度')).toBeTruthy();
