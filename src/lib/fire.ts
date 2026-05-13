@@ -57,7 +57,7 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
     expectedAnnualReturn: config.expectedAnnualReturn,
     forecasts: {
       contributionOnlyMonths: null,
-      withReturnMonths: null,
+      withReturnMonths: monthsWithReturnOnly(currentNetWorth, fireTarget, config.expectedAnnualReturn),
       stressMonths: null,
     },
     speedEstimates: fireSpeedEstimates(snapshots, fireTarget),
@@ -105,6 +105,14 @@ function monthsToFire(fireTarget: number, currentNetWorth: number, monthlyChange
   if (gap <= 0) return 0;
   if (monthlyChange <= 0) return null;
   return Math.ceil(gap / monthlyChange);
+}
+
+function monthsWithReturnOnly(current: number, target: number, annualReturn: number): number | null {
+  if (current >= target) return 0;
+  if (current <= 0 || annualReturn <= 0) return null;
+  const monthlyReturn = Math.pow(1 + annualReturn, 1 / 12) - 1;
+  if (monthlyReturn <= 0) return null;
+  return Math.ceil(Math.log(target / current) / Math.log(1 + monthlyReturn));
 }
 
 function averageMonthlyGrowth(snapshots: AssetSnapshot[]): number | null {

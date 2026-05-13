@@ -46,7 +46,7 @@ describe('FIRE analysis', () => {
     expect(result.monthlyGrowth).toBe(100000);
   });
 
-  it('keeps return-rate context but does not forecast with future contribution assumptions', () => {
+  it('uses expected annual return for return-only FIRE estimate without future contribution assumptions', () => {
     const config = {
       ...createDefaultFireConfig(),
       expectedAnnualReturn: 0.04,
@@ -54,7 +54,7 @@ describe('FIRE analysis', () => {
     const result = analyzeFire([snapshot('2026-01-01', 1000000), snapshot('2026-02-01', 1100000)], config);
 
     expect(result.forecasts.contributionOnlyMonths).toBeNull();
-    expect(result.forecasts.withReturnMonths).toBeNull();
+    expect(result.forecasts.withReturnMonths).toBeGreaterThan(0);
     expect(result.forecasts.stressMonths).toBeNull();
     expect(result.expectedAnnualReturn).toBe(0.04);
     expect(result.monthlyGrowth).toBe(100000);

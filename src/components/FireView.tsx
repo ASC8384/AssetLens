@@ -21,11 +21,16 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
 
   return (
     <section className="fire-view">
-      <div className="dashboard-hero fire-hero">
+      <div className="dashboard-hero fire-hero fire-hero-visual">
         <div>
           <span className="eyebrow">FIRE TRACKER</span>
-          <h2>{formatPercent(analysis.fireProgress)}</h2>
+          <h2>FIRE 仪表盘</h2>
           <p>当前进度 · 目标资产 {formatMoney(analysis.fireTarget)}</p>
+        </div>
+        <div className="fire-progress-orbit" aria-label="进度环">
+          <span className="fire-progress-fill" style={{ '--progress': `${Math.min(100, analysis.fireProgress * 100)}%` } as React.CSSProperties} />
+          <strong>{formatPercent(analysis.fireProgress)}</strong>
+          <small>进度环</small>
         </div>
         <div className="hero-delta">
           <span>距离 FIRE 还差</span>
@@ -49,6 +54,7 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
             <div><span>当前净资产</span><strong>{formatMoney(analysis.currentNetWorth)}</strong></div>
             <div><span>年支出</span><strong>{formatMoney(analysis.annualExpense)}</strong></div>
             <div><span>历史净资产月均变化</span><strong>{formatMoney(analysis.monthlyGrowth)}</strong></div>
+            <div><span>按预期年化收益率</span><strong>{formatMonths(analysis.forecasts.withReturnMonths)}</strong></div>
             <div><span>现金/银行卡可支撑月数</span><strong>{analysis.emergencyReserveMonths === null ? '—' : `${formatNumber(analysis.emergencyReserveMonths, 1)} 个月`}</strong></div>
           </div>
         </section>
