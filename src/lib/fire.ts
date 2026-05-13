@@ -1,6 +1,13 @@
 import { categoryTotals } from './calculations';
 import type { AssetSnapshot, FireConfig } from './types';
 
+export type FireSpeedEstimate = {
+  key: 'latest' | 'lastYear' | 'allTime';
+  label: string;
+  monthlyChange: number | null;
+  monthsToFire: number | null;
+};
+
 export type FireAnalysis = {
   currentNetWorth: number;
   annualExpense: number;
@@ -16,6 +23,7 @@ export type FireAnalysis = {
     withReturnMonths: number | null;
     stressMonths: number | null;
   };
+  speedEstimates: FireSpeedEstimate[];
   scenarios: Array<{ label: string; withdrawalRate: number; target: number; gap: number }>;
 };
 
@@ -52,11 +60,51 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
       withReturnMonths: null,
       stressMonths: null,
     },
+    speedEstimates: fireSpeedEstimates(snapshots, fireTarget),
     scenarios: [0.03, 0.035, 0.04].map((rate) => {
       const target = annualExpense / rate;
       return { label: `${(rate * 100).toFixed(1)}%`, withdrawalRate: rate, target, gap: Math.max(0, target - currentNetWorth) };
     }),
   };
+}
+
+export function fireSpeedEstimates(snapshots: AssetSnapshot[], fireTarget: number): FireSpeedEstimate[] {
+  const latest = latestIntervalEstimate(snapshots, fireTarget);
+  const lastYear = rangeEstimate(snapshots, fireTarget, 'lastYear', '近一年速度', 12);
+  const allTime = rangeEstimate(snapshots, fireTarget, 'allTime', '历史以来速度');
+  return [latest, lastYear, allTime];
+}
+
+function latestIntervalEstimate(snapshots: AssetSnapshot[], fireTarget: number): FireSpeedEstimate {
+  if (snapshots.length < 2) return { key: 'latest', label: '最近一次更新', monthlyChange: null, monthsToFire: null };
+  const previous = snapshots[snapshots.length - 2];
+  const latest = snapshots[snapshots.length - 1];
+  const months = Math.max(1, monthDiff(previous.date, latest.date));
+  const monthlyChange = (latest.computedTotalCny - previous.computedTotalCny) / months;
+  return { key: 'latest', label: '最近一次更新', monthlyChange, monthsToFire: monthsToFire(fireTarget, latest.computedTotalCny, monthlyChange) };
+}
+
+function rangeEstimate(snapshots: AssetSnapshot[], fireTarget: number, key: 'lastYear' | 'allTime', label: string, maxMonths?: number): FireSpeedEstimate {
+  if (snapshots.length < 2) return { key, label, monthlyChange: null, monthsToFire: null };
+  const latest = snapshots[snapshots.length - 1];
+  const start = maxMonths === undefined ? snapshots[0] : findStartWithinMonths(snapshots, latest.date, maxMonths);
+  const months = Math.max(1, monthDiff(start.date, latest.date));
+  const monthlyChange = (latest.computedTotalCny - start.computedTotalCny) / months;
+  return { key, label, monthlyChange, monthsToFire: monthsToFire(fireTarget, latest.computedTotalCny, monthlyChange) };
+}
+
+function findStartWithinMonths(snapshots: AssetSnapshot[], latestDate: string, months: number): AssetSnapshot {
+  const latest = new Date(`${latestDate}T00:00:00`);
+  const threshold = new Date(latest);
+  threshold.setMonth(threshold.getMonth() - months);
+  return snapshots.find((snapshot) => new Date(`${snapshot.date}T00:00:00`) >= threshold) ?? snapshots[0];
+}
+
+function monthsToFire(fireTarget: number, currentNetWorth: number, monthlyChange: number): number | null {
+  const gap = fireTarget - currentNetWorth;
+  if (gap <= 0) return 0;
+  if (monthlyChange <= 0) return null;
+  return Math.ceil(gap / monthlyChange);
 }
 
 function averageMonthlyGrowth(snapshots: AssetSnapshot[]): number | null {

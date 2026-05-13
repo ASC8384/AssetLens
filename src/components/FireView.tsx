@@ -2,6 +2,14 @@ import { analyzeFire } from '../lib/fire';
 import { formatMoney, formatPercent, formatNumber } from '../lib/format';
 import type { AppData } from '../lib/types';
 
+function formatMonths(months: number | null): string {
+  if (months === null) return '暂无法估算';
+  if (months === 0) return '已达成';
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  return years > 0 ? `${years} 年 ${rest} 个月` : `${rest} 个月`;
+}
+
 export function FireView({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
   const analysis = analyzeFire(data.snapshots, data.fire);
 
@@ -43,6 +51,20 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
             <div><span>历史净资产月均变化</span><strong>{formatMoney(analysis.monthlyGrowth)}</strong></div>
             <div><span>现金/银行卡可支撑月数</span><strong>{analysis.emergencyReserveMonths === null ? '—' : `${formatNumber(analysis.emergencyReserveMonths, 1)} 个月`}</strong></div>
           </div>
+        </section>
+
+        <section className="chart-card">
+          <h3>历史速度估算</h3>
+          <div className="contribution-list">
+            {analysis.speedEstimates.map((estimate) => (
+              <div key={estimate.key}>
+                <span>{estimate.label}</span>
+                <strong>{formatMonths(estimate.monthsToFire)}</strong>
+                <small>月均变化 {formatMoney(estimate.monthlyChange)}</small>
+              </div>
+            ))}
+          </div>
+          <p className="muted">仅按资产快照变化外推，可能受市场波动、奖金、大额支出和收入变化影响。</p>
         </section>
 
         <section className="chart-card">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeFire, createDefaultFireConfig } from './fire';
+import { analyzeFire, createDefaultFireConfig, fireSpeedEstimates } from './fire';
 import { recalculateSnapshot } from './calculations';
 import type { AssetSnapshot } from './types';
 
@@ -16,6 +16,23 @@ function snapshot(date: string, total: number): AssetSnapshot {
     ],
   });
 }
+
+describe('FIRE speed estimates', () => {
+  it('estimates months to FIRE from latest interval, last year and all history speeds', () => {
+    const snapshots = [
+      snapshot('2025-01-01', 1000000),
+      snapshot('2025-07-01', 1300000),
+      snapshot('2026-01-01', 1600000),
+      snapshot('2026-02-01', 1700000),
+    ];
+
+    expect(fireSpeedEstimates(snapshots, 2000000)).toEqual([
+      expect.objectContaining({ key: 'latest', monthlyChange: 100000, monthsToFire: 3 }),
+      expect.objectContaining({ key: 'lastYear', monthlyChange: 400000 / 7, monthsToFire: 6 }),
+      expect.objectContaining({ key: 'allTime', monthlyChange: 700000 / 13, monthsToFire: 6 }),
+    ]);
+  });
+});
 
 describe('FIRE analysis', () => {
   it('calculates target, progress, gap and emergency reserve months', () => {
