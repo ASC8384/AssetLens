@@ -39,6 +39,27 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
         </div>
       </div>
 
+      <section className="fire-route-card">
+        <div className="fire-route-header">
+          <div>
+            <span className="eyebrow">RETIREMENT ROUTE</span>
+            <h3>FIRE 航线</h3>
+          </div>
+          <strong>{formatPercent(analysis.fireProgress)}</strong>
+        </div>
+        <div className="fire-route-track" style={{ '--progress': `${Math.min(100, analysis.fireProgress * 100)}%` } as React.CSSProperties}>
+          <span className="route-line" />
+          <span className="route-line-fill" />
+          <span className="route-node current-node"><i />当前</span>
+          <span className="route-node target-node"><i />FIRE</span>
+        </div>
+        <div className="fire-route-stats">
+          <div><span>当前进度</span><strong>{formatPercent(analysis.fireProgress)}</strong></div>
+          <div><span>目标资产</span><strong>{formatMoney(analysis.fireTarget)}</strong></div>
+          <div><span>距离目标</span><strong>{formatMoney(analysis.fireGap)}</strong></div>
+        </div>
+      </section>
+
       <div className="fire-grid">
         <section className="chart-card fire-settings">
           <h3>FIRE 设置</h3>

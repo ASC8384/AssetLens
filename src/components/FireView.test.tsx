@@ -11,6 +11,10 @@ describe('FireView', () => {
     expect(screen.getByText('FIRE 仪表盘')).toBeTruthy();
     expect(screen.getByText('FIRE 设置')).toBeTruthy();
     expect(screen.getByText('进度环')).toBeTruthy();
+    expect(screen.getByText('FIRE 航线')).toBeTruthy();
+    expect(screen.getByText('目标资产')).toBeTruthy();
+    expect(screen.getByText('当前进度')).toBeTruthy();
+    expect(screen.getByText('距离目标')).toBeTruthy();
     expect(screen.getByText('提取率场景')).toBeTruthy();
     expect(screen.getByText('历史速度估算')).toBeTruthy();
     expect(screen.getByText('最近一次更新')).toBeTruthy();
