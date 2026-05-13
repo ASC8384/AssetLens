@@ -5,7 +5,7 @@ export type FireSpeedEstimate = {
   key: 'latest' | 'lastYear' | 'allTime';
   label: string;
   monthlyChange: number | null;
-  monthsToFire: number | null;
+  projectedMonthsToFire: number | null;
 };
 
 export type FireAnalysis = {
@@ -76,21 +76,21 @@ export function fireSpeedEstimates(snapshots: AssetSnapshot[], fireTarget: numbe
 }
 
 function latestIntervalEstimate(snapshots: AssetSnapshot[], fireTarget: number): FireSpeedEstimate {
-  if (snapshots.length < 2) return { key: 'latest', label: '最近一次更新', monthlyChange: null, monthsToFire: null };
+  if (snapshots.length < 2) return { key: 'latest', label: '最近一次更新', monthlyChange: null, projectedMonthsToFire: null };
   const previous = snapshots[snapshots.length - 2];
   const latest = snapshots[snapshots.length - 1];
   const months = Math.max(1, monthDiff(previous.date, latest.date));
   const monthlyChange = (latest.computedTotalCny - previous.computedTotalCny) / months;
-  return { key: 'latest', label: '最近一次更新', monthlyChange, monthsToFire: monthsToFire(fireTarget, latest.computedTotalCny, monthlyChange) };
+  return { key: 'latest', label: '最近一次更新', monthlyChange, projectedMonthsToFire: monthsToFire(fireTarget, latest.computedTotalCny, monthlyChange) };
 }
 
 function rangeEstimate(snapshots: AssetSnapshot[], fireTarget: number, key: 'lastYear' | 'allTime', label: string, maxMonths?: number): FireSpeedEstimate {
-  if (snapshots.length < 2) return { key, label, monthlyChange: null, monthsToFire: null };
+  if (snapshots.length < 2) return { key, label, monthlyChange: null, projectedMonthsToFire: null };
   const latest = snapshots[snapshots.length - 1];
   const start = maxMonths === undefined ? snapshots[0] : findStartWithinMonths(snapshots, latest.date, maxMonths);
   const months = Math.max(1, monthDiff(start.date, latest.date));
   const monthlyChange = (latest.computedTotalCny - start.computedTotalCny) / months;
-  return { key, label, monthlyChange, monthsToFire: monthsToFire(fireTarget, latest.computedTotalCny, monthlyChange) };
+  return { key, label, monthlyChange, projectedMonthsToFire: monthsToFire(fireTarget, latest.computedTotalCny, monthlyChange) };
 }
 
 function findStartWithinMonths(snapshots: AssetSnapshot[], latestDate: string, months: number): AssetSnapshot {

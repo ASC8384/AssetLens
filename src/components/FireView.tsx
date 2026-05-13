@@ -86,7 +86,7 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
             {analysis.speedEstimates.map((estimate) => (
               <div key={estimate.key}>
                 <span>{estimate.label}</span>
-                <strong>{formatMonths(estimate.monthsToFire)}</strong>
+                <strong>{formatMonths(estimate.projectedMonthsToFire)}</strong>
                 <small>月均变化 {formatMoney(estimate.monthlyChange)}</small>
               </div>
             ))}

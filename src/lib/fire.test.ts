@@ -27,9 +27,9 @@ describe('FIRE speed estimates', () => {
     ];
 
     expect(fireSpeedEstimates(snapshots, 2000000)).toEqual([
-      expect.objectContaining({ key: 'latest', monthlyChange: 100000, monthsToFire: 3 }),
-      expect.objectContaining({ key: 'lastYear', monthlyChange: 400000 / 7, monthsToFire: 6 }),
-      expect.objectContaining({ key: 'allTime', monthlyChange: 700000 / 13, monthsToFire: 6 }),
+      expect.objectContaining({ key: 'latest', monthlyChange: 100000, projectedMonthsToFire: 3 }),
+      expect.objectContaining({ key: 'lastYear', monthlyChange: 400000 / 7, projectedMonthsToFire: 6 }),
+      expect.objectContaining({ key: 'allTime', monthlyChange: 700000 / 13, projectedMonthsToFire: 6 }),
     ]);
   });
 });
