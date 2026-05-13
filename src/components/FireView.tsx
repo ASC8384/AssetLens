@@ -29,7 +29,10 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
         </div>
         <div className="fire-progress-orbit" aria-label="进度环">
           <span className="fire-progress-fill" style={{ '--progress': `${Math.min(100, analysis.fireProgress * 100)}%` } as React.CSSProperties} />
-          <strong>{formatPercent(analysis.fireProgress)}</strong>
+          <div className="fire-progress-center">
+            <small>FIRE进度</small>
+            <strong>{formatPercent(analysis.fireProgress)}</strong>
+          </div>
         </div>
         <div className="hero-delta">
           <span>距离 FIRE 还差</span>
