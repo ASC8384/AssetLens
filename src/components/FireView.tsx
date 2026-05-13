@@ -41,7 +41,7 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
             <div><span>当前净资产</span><strong>{formatMoney(analysis.currentNetWorth)}</strong></div>
             <div><span>年支出</span><strong>{formatMoney(analysis.annualExpense)}</strong></div>
             <div><span>历史净资产月均变化</span><strong>{formatMoney(analysis.monthlyGrowth)}</strong></div>
-            <div><span>应急备用金覆盖</span><strong>{analysis.emergencyReserveMonths === null ? '—' : `${formatNumber(analysis.emergencyReserveMonths, 1)} 个月`}</strong></div>
+            <div><span>现金/银行卡可支撑月数</span><strong>{analysis.emergencyReserveMonths === null ? '—' : `${formatNumber(analysis.emergencyReserveMonths, 1)} 个月`}</strong></div>
           </div>
         </section>
 
