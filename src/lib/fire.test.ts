@@ -29,18 +29,17 @@ describe('FIRE analysis', () => {
     expect(result.monthlyGrowth).toBe(100000);
   });
 
-  it('uses contribution and return assumptions for FIRE forecast scenarios', () => {
+  it('keeps return-rate context but does not forecast with future contribution assumptions', () => {
     const config = {
       ...createDefaultFireConfig(),
-      monthlyContribution: 20000,
       expectedAnnualReturn: 0.04,
-      stressNoContributionMonths: 6,
     };
-    const result = analyzeFire([snapshot('2026-01-01', 1000000)], config);
+    const result = analyzeFire([snapshot('2026-01-01', 1000000), snapshot('2026-02-01', 1100000)], config);
 
-    expect(result.forecasts.contributionOnlyMonths).toBe(122);
-    expect(result.forecasts.withReturnMonths).toBeLessThan(result.forecasts.contributionOnlyMonths ?? Infinity);
-    expect(result.forecasts.stressMonths).toBeGreaterThan(result.forecasts.withReturnMonths ?? 0);
-    expect(result.monthlyGrowth).toBeNull();
+    expect(result.forecasts.contributionOnlyMonths).toBeNull();
+    expect(result.forecasts.withReturnMonths).toBeNull();
+    expect(result.forecasts.stressMonths).toBeNull();
+    expect(result.expectedAnnualReturn).toBe(0.04);
+    expect(result.monthlyGrowth).toBe(100000);
   });
 });

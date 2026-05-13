@@ -43,9 +43,7 @@ export type FireConfig = {
   monthlyExpense: number;
   withdrawalRate: number;
   emergencyReserveMonthsTarget: number;
-  monthlyContribution: number;
   expectedAnnualReturn: number;
-  stressNoContributionMonths: number;
 };
 
 export type AppData = {
