@@ -10,5 +10,7 @@ describe('FireView', () => {
     expect(screen.getByText('FIRE TRACKER')).toBeTruthy();
     expect(screen.getByText('FIRE 设置')).toBeTruthy();
     expect(screen.getByText('提取率场景')).toBeTruthy();
+    expect(screen.getByText('预计达成')).toBeTruthy();
+    expect(screen.getByText('每月主动净投入')).toBeTruthy();
   });
 });

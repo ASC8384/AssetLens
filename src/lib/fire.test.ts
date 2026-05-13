@@ -28,4 +28,19 @@ describe('FIRE analysis', () => {
     expect(result.emergencyReserveMonths).toBe(30);
     expect(result.monthlyGrowth).toBe(100000);
   });
+
+  it('uses contribution and return assumptions for FIRE forecast scenarios', () => {
+    const config = {
+      ...createDefaultFireConfig(),
+      monthlyContribution: 20000,
+      expectedAnnualReturn: 0.04,
+      stressNoContributionMonths: 6,
+    };
+    const result = analyzeFire([snapshot('2026-01-01', 1000000)], config);
+
+    expect(result.forecasts.contributionOnlyMonths).toBe(122);
+    expect(result.forecasts.withReturnMonths).toBeLessThan(result.forecasts.contributionOnlyMonths ?? Infinity);
+    expect(result.forecasts.stressMonths).toBeGreaterThan(result.forecasts.withReturnMonths ?? 0);
+    expect(result.monthlyGrowth).toBeNull();
+  });
 });
