@@ -39,14 +39,21 @@ export type StrategyConfig = {
   targetCategoryRatios: Partial<Record<AssetCategory, number>>;
 };
 
+export type FireConfig = {
+  monthlyExpense: number;
+  withdrawalRate: number;
+  emergencyReserveMonthsTarget: number;
+};
+
 export type AppData = {
   version: 1;
   snapshots: AssetSnapshot[];
   accounts: AccountConfig[];
   defaultExchangeRates: Record<string, number>;
   strategy: StrategyConfig;
+  fire: FireConfig;
   preferences: {
-    activeTab: 'dashboard' | 'details' | 'report';
+    activeTab: 'dashboard' | 'details' | 'report' | 'fire';
     detailMode: 'compact' | 'analysis';
     categoryFilter: AssetCategory | '全部';
   };

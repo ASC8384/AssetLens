@@ -67,6 +67,7 @@ describe('dashboardSummary', () => {
       accounts: [],
       defaultExchangeRates: { CNY: 1 },
       strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
+      fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12 },
       preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
     };
 
@@ -95,6 +96,7 @@ describe('dashboard chart helpers', () => {
       accounts: [],
       defaultExchangeRates: { CNY: 1 },
       strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
+      fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12 },
       preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
     };
 
@@ -123,6 +125,7 @@ describe('categoryTrendData', () => {
       accounts: [],
       defaultExchangeRates: { CNY: 1 },
       strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
+      fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12 },
       preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
     };
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ConfigPanel } from './components/ConfigPanel';
 import { Dashboard } from './components/Dashboard';
 import { DetailsTable } from './components/DetailsTable';
+import { FireView } from './components/FireView';
 import { ImportCenter } from './components/ImportCenter';
 import { ReviewReport } from './components/ReviewReport';
 import { TopBar } from './components/TopBar';
@@ -52,12 +53,14 @@ export default function App() {
         <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>仪表盘</button>
         <button className={activeTab === 'details' ? 'active' : ''} onClick={() => setActiveTab('details')}>明细表</button>
         <button className={activeTab === 'report' ? 'active' : ''} onClick={() => setActiveTab('report')}>复盘报告</button>
+        <button className={activeTab === 'fire' ? 'active' : ''} onClick={() => setActiveTab('fire')}>FIRE</button>
       </nav>
 
       <main>
         {activeTab === 'dashboard' && <Dashboard data={data} />}
         {activeTab === 'details' && <DetailsTable data={data} onChange={updateData} />}
         {activeTab === 'report' && <ReviewReport data={data} />}
+        {activeTab === 'fire' && <FireView data={data} onChange={updateData} />}
       </main>
     </div>
   );

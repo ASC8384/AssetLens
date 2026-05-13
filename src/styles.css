@@ -244,3 +244,10 @@ th.sticky-col { background: #f4efe6; z-index: 3; }
   .main-charts, .secondary-charts, .tertiary-charts, .import-grid, .config-grid, .control-strip, .three-column-controls { grid-template-columns: 1fr; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+.fire-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.fire-settings { display: grid; gap: 12px; }
+.fire-settings label { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.fire-settings input { width: 130px; }
+.fire-hero { margin-top: 0; }
+@media (max-width: 1200px) { .fire-grid { grid-template-columns: 1fr; } }

@@ -28,6 +28,7 @@ export function normalizeAppData(value: unknown): AppData {
     accounts: Array.isArray(candidate.accounts) ? candidate.accounts : [],
     defaultExchangeRates: { ...empty.defaultExchangeRates, ...(candidate.defaultExchangeRates ?? {}) },
     strategy: { ...empty.strategy, ...(candidate.strategy ?? {}) },
+    fire: { ...empty.fire, ...(candidate.fire ?? {}) },
     preferences: { ...empty.preferences, ...(candidate.preferences ?? {}) },
   });
 }

@@ -27,6 +27,7 @@ const data: AppData = {
     riskAssetMaxRatio: 0.7,
     targetCategoryRatios: { 基金: 0.4, 现金: 0.2 },
   },
+  fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12 },
   preferences: { activeTab: 'report', detailMode: 'compact', categoryFilter: '全部' },
 };
 
