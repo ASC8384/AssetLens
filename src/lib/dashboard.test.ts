@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountRankingRows, categoryChangeRows, categoryTrendData, dashboardSummary, riskTrendData, selectedSnapshotContext } from './dashboard';
+import { accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, riskTrendData, selectedSnapshotContext } from './dashboard';
 import { recalculateSnapshot } from './calculations';
 import type { AppData, AssetSnapshot } from './types';
 
@@ -132,6 +132,41 @@ describe('categoryTrendData', () => {
     expect(categoryTrendData(data)).toEqual([
       expect.objectContaining({ date: '2026-01-01', total: 140, 基金: 100, 现金: 40 }),
       expect.objectContaining({ date: '2026-02-01', total: 180, 基金: 120, 现金: 60 }),
+    ]);
+  });
+});
+
+describe('dailyNetChangeRows', () => {
+  it('returns daily net asset changes between adjacent snapshots', () => {
+    const data: AppData = {
+      version: 1,
+      snapshots: [snapshot('2026-01-01', 100, 40), snapshot('2026-01-11', 220, 20), snapshot('2026-01-21', 170, 20)],
+      accounts: [],
+      defaultExchangeRates: { CNY: 1 },
+      strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
+      fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
+      preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
+    };
+
+    expect(dailyNetChangeRows(data)).toEqual([
+      { startDate: '2026-01-01', endDate: '2026-01-11', days: 10, totalChange: 100, dailyChange: 10 },
+      { startDate: '2026-01-11', endDate: '2026-01-21', days: 10, totalChange: -50, dailyChange: -5 },
+    ]);
+  });
+
+  it('skips intervals without a positive day span', () => {
+    const data: AppData = {
+      version: 1,
+      snapshots: [snapshot('2026-01-01', 100, 40), snapshot('2026-01-01', 120, 60), snapshot('2026-01-11', 220, 60)],
+      accounts: [],
+      defaultExchangeRates: { CNY: 1 },
+      strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
+      fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
+      preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
+    };
+
+    expect(dailyNetChangeRows(data)).toEqual([
+      { startDate: '2026-01-01', endDate: '2026-01-11', days: 10, totalChange: 100, dailyChange: 10 },
     ]);
   });
 });

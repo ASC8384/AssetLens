@@ -201,7 +201,7 @@ code { color: var(--blue); }
 .chart-grid { display: grid; gap: 16px; margin-top: 16px; }
 .main-charts { grid-template-columns: 2fr 1fr; }
 .secondary-charts { grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr); }
-.tertiary-charts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tertiary-charts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .chart-card { padding: 20px; min-width: 0; }
 .chart-card h3 { margin: 0 0 14px; font-family: 'DM Serif Display', Georgia, serif; font-size: 24px; font-weight: 400; color: var(--navy); }
 .legend-list { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -240,6 +240,8 @@ th.sticky-col { background: #f4efe6; z-index: 3; }
 .contribution-list { display: grid; gap: 10px; }
 .contribution-list div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .recharts-default-tooltip { border-radius: 14px !important; border: 1px solid var(--line) !important; box-shadow: 0 16px 36px rgba(16,35,63,.14) !important; }
+.custom-tooltip { display: grid; gap: 5px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.96); box-shadow: 0 16px 36px rgba(16,35,63,.14); color: var(--navy); }
+.custom-tooltip span { color: #5b6473; font-size: 13px; }
 @media (max-width: 1200px) {
   .main-charts, .secondary-charts, .tertiary-charts, .import-grid, .config-grid, .control-strip, .three-column-controls { grid-template-columns: 1fr; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }

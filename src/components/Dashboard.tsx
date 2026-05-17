@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { accountChanges, categoryTotals, totalChange } from '../lib/calculations';
-import { accountRankingRows, categoryChangeRows, categoryTrendData, dashboardSummary, riskTrendData, selectedSnapshotContext } from '../lib/dashboard';
+import { accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, riskTrendData, selectedSnapshotContext } from '../lib/dashboard';
 import { categories, categoryColors } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
 import { analyzeStrategy } from '../lib/strategy';
@@ -23,6 +23,7 @@ export function Dashboard({ data }: { data: AppData }) {
   const topChanges = accountChanges(comparisonSnapshots);
   const rankingRows = accountRankingRows(selected).slice(0, 8);
   const riskRows = riskTrendData(data);
+  const dailyRows = dailyNetChangeRows(data);
   const categoryChanges = categoryChangeRows(previous, selected).filter((row) => row.change !== 0);
   const comparisonLabel = previous ? `${previous.date} → ${selected.date}` : `${selected.date} 无前一期`;
   const summary = dashboardSummary({ ...data, snapshots: [selected] });
@@ -116,6 +117,20 @@ export function Dashboard({ data }: { data: AppData }) {
       </div>
 
       <div className="chart-grid tertiary-charts">
+        <ChartCard title="区间日均资产净增">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={dailyRows} margin={{ left: 8, right: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="endDate" />
+              <YAxis tickFormatter={(value) => `${Math.round(Number(value))}/日`} />
+              <Tooltip content={<DailyNetChangeTooltip />} />
+              <Bar dataKey="dailyChange" name="日均净增">
+                {dailyRows.map((row) => <Cell key={`${row.startDate}-${row.endDate}`} fill={row.dailyChange >= 0 ? '#059669' : '#dc2626'} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
         <ChartCard title="现金 vs 风险资产趋势">
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={riskRows}>
@@ -192,6 +207,30 @@ function Metric({ title, value, hint, tone }: { title: string; value: string; hi
       <span>{title}</span>
       <strong className={tone}>{value}</strong>
       <small>{hint}</small>
+    </div>
+  );
+}
+
+type TooltipPayload = {
+  payload?: {
+    startDate: string;
+    endDate: string;
+    days: number;
+    totalChange: number;
+    dailyChange: number;
+  };
+};
+
+function DailyNetChangeTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayload[] }) {
+  const row = payload?.[0]?.payload;
+  if (!active || !row) return null;
+
+  return (
+    <div className="custom-tooltip">
+      <strong>{row.startDate} → {row.endDate}</strong>
+      <span>{row.days} 天</span>
+      <span>总变化：{formatMoney(row.totalChange)}</span>
+      <span>日均净增：{formatMoney(row.dailyChange)}</span>
     </div>
   );
 }

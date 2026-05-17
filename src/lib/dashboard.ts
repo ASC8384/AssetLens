@@ -85,6 +85,33 @@ export function riskTrendData(data: AppData): Array<{ date: string; risk: number
   });
 }
 
+export type DailyNetChangeRow = {
+  startDate: string;
+  endDate: string;
+  days: number;
+  totalChange: number;
+  dailyChange: number;
+};
+
+export function dailyNetChangeRows(data: AppData): DailyNetChangeRow[] {
+  return data.snapshots.flatMap((snapshot, index) => {
+    const previous = data.snapshots[index - 1];
+    if (!previous) return [];
+
+    const days = (new Date(snapshot.date).getTime() - new Date(previous.date).getTime()) / 86400000;
+    if (days <= 0 || !Number.isFinite(days)) return [];
+
+    const totalChange = snapshot.computedTotalCny - previous.computedTotalCny;
+    return [{
+      startDate: previous.date,
+      endDate: snapshot.date,
+      days,
+      totalChange,
+      dailyChange: totalChange / days,
+    }];
+  });
+}
+
 export function categoryChangeRows(previous: AssetSnapshot | undefined, selected: AssetSnapshot): Array<{ category: AssetCategory; change: number }> {
   const previousTotals = previous ? categoryTotals(previous, []) : Object.fromEntries(categories.map((category) => [category, 0])) as Record<AssetCategory, number>;
   const selectedTotals = categoryTotals(selected, []);
