@@ -119,15 +119,14 @@ export function Dashboard({ data }: { data: AppData }) {
       <div className="chart-grid tertiary-charts">
         <ChartCard title="区间日均资产净增">
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={dailyRows} margin={{ left: 8, right: 20 }}>
+            <LineChart data={dailyRows} margin={{ left: 8, right: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="endDate" />
               <YAxis tickFormatter={(value) => `${Math.round(Number(value))}/日`} />
               <Tooltip content={<DailyNetChangeTooltip />} />
-              <Bar dataKey="dailyChange" name="日均净增">
-                {dailyRows.map((row) => <Cell key={`${row.startDate}-${row.endDate}`} fill={row.dailyChange >= 0 ? '#059669' : '#dc2626'} />)}
-              </Bar>
-            </BarChart>
+              <ReferenceLine y={0} stroke="#98a2b3" strokeDasharray="4 4" />
+              <Line type="monotone" dataKey="dailyChange" name="日均净增" stroke="#2266ff" strokeWidth={3} dot={{ r: 4 }} />
+            </LineChart>
           </ResponsiveContainer>
         </ChartCard>
 
