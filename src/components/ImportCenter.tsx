@@ -1,27 +1,80 @@
 import { useMemo, useState } from 'react';
-import { buildSnapshotsFromDraft, createImportDraft, mergeImportedData, parseExcelFile, parsePastedTable } from '../lib/importers';
+import { buildManualSnapshot, buildSnapshotsFromDraft, createImportDraft, mergeImportedData, parseExcelFile, parsePastedTable } from '../lib/importers';
 import { analyzeImportQuality, ignoreTotalColumns } from '../lib/importQuality';
 import { formatMoney, formatPercent } from '../lib/format';
-import type { AppData, DuplicateDateMode, FieldMapping, ImportDraft } from '../lib/types';
+import type { AccountConfig, AppData, DuplicateDateMode, FieldMapping, ImportDraft } from '../lib/types';
 import { categories } from '../lib/defaults';
 
-export function ImportCenter({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
+type ManualDraft = {
+  date: string;
+  amountByAccountId: Record<string, string>;
+};
+
+export type ImportCompletion = {
+  data: AppData;
+  snapshotCount: number;
+  accountCount: number;
+  dangerCount: number;
+  warningCount: number;
+  isFirstImport: boolean;
+};
+
+function todayString(): string {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function manualAccounts(data: AppData): AccountConfig[] {
+  const previous = data.snapshots[data.snapshots.length - 1];
+  return data.accounts.length > 0 ? data.accounts : previous?.entries.map((entry) => ({
+    id: entry.accountId,
+    name: entry.accountName,
+    category: entry.category,
+    defaultCurrency: entry.currency,
+    includedInTotal: entry.includedInTotal,
+    hidden: false,
+  })) ?? [];
+}
+
+function createManualDraft(data: AppData, accounts: AccountConfig[]): ManualDraft {
+  const previous = data.snapshots[data.snapshots.length - 1];
+  const previousEntries = new Map(previous?.entries.map((entry) => [entry.accountId, entry]) ?? []);
+  return {
+    date: todayString(),
+    amountByAccountId: Object.fromEntries(accounts.map((account) => [account.id, previousEntries.get(account.id)?.originalAmount?.toString() ?? ''])),
+  };
+}
+
+export function ImportCenter({ data, onChange, onImportComplete }: { data: AppData; onChange: (data: AppData, message?: string) => void; onImportComplete?: (completion: ImportCompletion) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState<ImportDraft | null>(null);
+  const [manualDraft, setManualDraft] = useState<ManualDraft | null>(null);
   const [pasteText, setPasteText] = useState('');
   const [duplicateMode, setDuplicateMode] = useState<DuplicateDateMode>('overwrite');
   const importedPreview = useMemo(() => draft ? buildSnapshotsFromDraft(draft, data.accounts) : null, [draft, data.accounts]);
   const importQuality = useMemo(() => importedPreview ? analyzeImportQuality(importedPreview.snapshots, importedPreview.accounts.length) : null, [importedPreview]);
+  const manualAccountList = useMemo(() => manualAccounts(data), [data]);
 
   async function handleFile(file: File | null) {
     if (!file) return;
+    setManualDraft(null);
     const parsed = await parseExcelFile(file);
     setDraft(createImportDraft(parsed));
   }
 
   function handlePasteParse() {
     if (!pasteText.trim()) return;
+    setManualDraft(null);
     setDraft(createImportDraft(parsePastedTable(pasteText)));
+  }
+
+  function startManualInput() {
+    setDraft(null);
+    setDuplicateMode('overwrite');
+    setManualDraft(createManualDraft(data, manualAccountList));
   }
 
   function updateMapping(columnIndex: number, patch: Partial<FieldMapping>) {
@@ -32,12 +85,40 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
     });
   }
 
+  function updateManualAmount(accountId: string, value: string) {
+    if (!manualDraft) return;
+    setManualDraft({
+      ...manualDraft,
+      amountByAccountId: { ...manualDraft.amountByAccountId, [accountId]: value },
+    });
+  }
+
   function confirmImport() {
     if (!draft) return;
     const imported = buildSnapshotsFromDraft(draft, data.accounts);
-    onChange(mergeImportedData(data, imported.snapshots, imported.accounts, duplicateMode));
+    const quality = analyzeImportQuality(imported.snapshots, imported.accounts.length);
+    const nextData = mergeImportedData(data, imported.snapshots, imported.accounts, duplicateMode);
+    if (onImportComplete) {
+      onImportComplete({
+        data: nextData,
+        snapshotCount: quality.snapshotCount,
+        accountCount: quality.accountCount,
+        dangerCount: quality.dangerCount,
+        warningCount: quality.warningCount,
+        isFirstImport: data.snapshots.length === 0,
+      });
+    } else {
+      onChange(nextData);
+    }
     setDraft(null);
     setPasteText('');
+  }
+
+  function confirmManualInput() {
+    if (!manualDraft?.date || manualAccountList.length === 0) return;
+    const snapshot = buildManualSnapshot(data, manualDraft.date, manualDraft.amountByAccountId);
+    onChange(mergeImportedData(data, [snapshot], manualAccountList, duplicateMode));
+    setManualDraft(null);
   }
 
   return (
@@ -47,10 +128,10 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
           <h2>导入数据</h2>
           <p>默认只导入金额列；<code>占比</code> 列会自动忽略，用网页重算占比。</p>
         </div>
-        <button onClick={() => setExpanded(!expanded)}>{expanded || draft ? '收起导入区' : '展开导入区'}</button>
+        <button onClick={() => setExpanded(!expanded)}>{expanded || draft || manualDraft ? '收起导入区' : '展开导入区'}</button>
       </div>
 
-      {(expanded || draft) && <>
+      {(expanded || draft || manualDraft) && <>
       <div className="help-card">
         <h3>导入格式说明</h3>
         <ul>
@@ -62,6 +143,47 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
         <pre>{`时间\t基金账户A\t占比\t现金账户A\t占比\t合计
 2026-05-01\t59000\t34.3%\t10000\t5.8%\t69000`}</pre>
       </div>
+
+      <div className="help-card manual-card">
+        <h3>手动新增一期</h3>
+        <p>按最近一期金额预填，适合只调整少数账户后快速补录一条新快照。</p>
+        {!manualDraft && <button onClick={startManualInput}>开始手动输入</button>}
+      </div>
+
+      {manualDraft && (
+        <div className="mapping-area manual-input-panel">
+          <div className="section-header">
+            <div>
+              <h3>手动新增一期</h3>
+              <p>沿用上一期数值，按需修改即可。</p>
+            </div>
+            <div className="toolbar compact-toolbar">
+              {manualAccountList.length > 0 && (
+                <>
+                  <select aria-label="重复日期处理方式" value={duplicateMode} onChange={(event) => setDuplicateMode(event.target.value as DuplicateDateMode)}>
+                    <option value="overwrite">重复日期覆盖</option>
+                    <option value="keep">重复日期保留新记录</option>
+                    <option value="skip">重复日期跳过</option>
+                  </select>
+                  <button className="primary" onClick={confirmManualInput}>保存</button>
+                </>
+              )}
+              <button onClick={() => setManualDraft(null)}>取消</button>
+            </div>
+          </div>
+
+          {manualAccountList.length === 0 ? (
+            <p>请先导入一次数据，或先到明细表新增账户。</p>
+          ) : (
+            <div className="manual-grid">
+              <label>日期<input aria-label="日期" type="date" value={manualDraft.date} onChange={(event) => setManualDraft({ ...manualDraft, date: event.target.value })} /></label>
+              {manualAccountList.map((account) => (
+                <label key={account.id}>{account.name}<input aria-label={account.name} value={manualDraft.amountByAccountId[account.id] ?? ''} onChange={(event) => updateManualAmount(account.id, event.target.value)} /></label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="import-grid">
         <label className="drop-card">
@@ -117,7 +239,7 @@ export function ImportCenter({ data, onChange }: { data: AppData; onChange: (dat
                       <select value={mapping.role} onChange={(event) => updateMapping(mapping.columnIndex, { role: event.target.value as FieldMapping['role'] })}>
                         <option value="date">时间</option>
                         <option value="account">账户金额</option>
-                                                <option value="total">合计</option>
+                        <option value="total">合计</option>
                         <option value="ignore">忽略</option>
                       </select>
                     </td>

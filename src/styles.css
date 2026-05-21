@@ -131,6 +131,11 @@ code { color: var(--blue); }
 .help-card h3 { margin: 0 0 8px; }
 .help-card ul { margin: 0 0 12px; padding-left: 20px; }
 .help-card pre { margin: 0; overflow: auto; background: rgba(255,255,255,.8); border: 1px solid rgba(34,102,255,.16); border-radius: 14px; padding: 12px; color: var(--ink); }
+.manual-card, .manual-input-panel { border: 1px solid var(--line); border-radius: 20px; background: rgba(255,255,255,.72); padding: 18px; }
+.manual-card { display: grid; gap: 10px; align-content: start; }
+.manual-card p { margin: 0; }
+.manual-grid { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
+.manual-grid label { display: grid; gap: 6px; color: #475467; }
 .mapping-area { margin-top: 20px; }
 .preview-note { margin-top: 12px; color: var(--blue); font-weight: 800; }
 .quality-preview { display: grid; gap: 12px; margin-top: 16px; }

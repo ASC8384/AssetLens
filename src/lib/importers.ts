@@ -139,21 +139,25 @@ export function buildSnapshotsFromDraft(draft: ImportDraft, existingAccounts: Ac
 }
 
 export function mergeImportedData(data: AppData, imported: AssetSnapshot[], accounts: AccountConfig[], duplicateMode: DuplicateDateMode): AppData {
-  const byDate = new Map(data.snapshots.map((snapshot) => [snapshot.date, snapshot]));
+  const seenDates = new Set(data.snapshots.map((snapshot) => snapshot.date));
   const merged = [...data.snapshots];
   for (const snapshot of imported) {
-    const existing = byDate.get(snapshot.date);
+    const existing = seenDates.has(snapshot.date);
     if (!existing) {
       merged.push(snapshot);
+      seenDates.add(snapshot.date);
       continue;
     }
     if (duplicateMode === 'skip') continue;
     if (duplicateMode === 'overwrite') {
-      const index = merged.findIndex((item) => item.date === snapshot.date);
-      merged[index] = snapshot;
+      for (let index = merged.length - 1; index >= 0; index -= 1) {
+        if (merged[index].date === snapshot.date) merged.splice(index, 1);
+      }
+      merged.push(snapshot);
     } else {
-      merged.push({ ...snapshot, id: crypto.randomUUID(), date: `${snapshot.date} #${crypto.randomUUID().slice(0, 4)}` });
+      merged.push({ ...snapshot, id: crypto.randomUUID() });
     }
+    seenDates.add(snapshot.date);
   }
   return {
     ...data,
@@ -176,7 +180,7 @@ function manualSnapshotAccounts(data: AppData, previous: AssetSnapshot | undefin
 export function buildManualSnapshot(data: AppData, date: string, amountByAccountId: Record<string, string | undefined>): AssetSnapshot {
   const previous = data.snapshots[data.snapshots.length - 1];
   const accounts = manualSnapshotAccounts(data, previous);
-  const exchangeRates = previous?.exchangeRates ?? data.defaultExchangeRates;
+  const exchangeRates = { ...data.defaultExchangeRates, ...(previous?.exchangeRates ?? {}) };
   return recalculateSnapshot({
     id: crypto.randomUUID(),
     date,
@@ -197,5 +201,8 @@ export function createManualSnapshot(data: AppData, date: string): AssetSnapshot
 function normalizeDate(value: string | undefined, rowIndex: number): string {
   const raw = (value ?? '').trim();
   if (!raw) return `未命名日期 ${rowIndex + 1}`;
-  return raw.replace(/\//g, '-');
+  const match = raw.match(/^(\d{4})[-/](\d{1,2})(?:[-/](\d{1,2}))?$/);
+  if (!match) return raw.replace(/\//g, '-');
+  const [, year, month, day = '1'] = match;
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }

@@ -36,6 +36,77 @@ function createSnapshot(
   });
 }
 
+describe('import date handling', () => {
+  it('normalizes slash and non-padded dates to sortable ISO date strings', () => {
+    const draft = importers.createImportDraft({
+      headers: ['时间', '基金账户'],
+      rows: [
+        ['2026/5/1', '100'],
+        ['2026-10-01', '200'],
+      ],
+    });
+
+    const result = importers.buildSnapshotsFromDraft(draft, []);
+
+    expect(result.snapshots.map((snapshot) => snapshot.date)).toEqual(['2026-05-01', '2026-10-01']);
+  });
+
+  it('keeps duplicate records without corrupting the snapshot date field', () => {
+    const account = createAccount('fund', '基金账户', 'CNY');
+    const data: AppData = {
+      ...createEmptyAppData(),
+      accounts: [account],
+      snapshots: [createSnapshot('2026-05-01', { CNY: 1 }, [{ account, amount: 100 }])],
+    };
+    const incoming = createSnapshot('2026-05-01', { CNY: 1 }, [{ account, amount: 200 }]);
+
+    const merged = importers.mergeImportedData(data, [incoming], data.accounts, 'keep');
+
+    expect(merged.snapshots).toHaveLength(2);
+    expect(merged.snapshots.map((snapshot) => snapshot.date)).toEqual(['2026-05-01', '2026-05-01']);
+  });
+
+  it('overwrites duplicate dates within the same import batch', () => {
+    const account = createAccount('fund', '基金账户', 'CNY');
+    const first = createSnapshot('2026-05-01', { CNY: 1 }, [{ account, amount: 100 }]);
+    const second = createSnapshot('2026-05-01', { CNY: 1 }, [{ account, amount: 200 }]);
+
+    const merged = importers.mergeImportedData(createEmptyAppData(), [first, second], [account], 'overwrite');
+
+    expect(merged.snapshots).toHaveLength(1);
+    expect(merged.snapshots[0].entries[0].originalAmount).toBe(200);
+  });
+
+  it('skips duplicate dates within the same import batch after the first record', () => {
+    const account = createAccount('fund', '基金账户', 'CNY');
+    const first = createSnapshot('2026-05-01', { CNY: 1 }, [{ account, amount: 100 }]);
+    const second = createSnapshot('2026-05-01', { CNY: 1 }, [{ account, amount: 200 }]);
+
+    const merged = importers.mergeImportedData(createEmptyAppData(), [first, second], [account], 'skip');
+
+    expect(merged.snapshots).toHaveLength(1);
+    expect(merged.snapshots[0].entries[0].originalAmount).toBe(100);
+  });
+
+  it('overwrites all existing records for the same date', () => {
+    const account = createAccount('fund', '基金账户', 'CNY');
+    const data: AppData = {
+      ...createEmptyAppData(),
+      accounts: [account],
+      snapshots: [
+        createSnapshot('2026-05-01', { CNY: 1 }, [{ account, amount: 100 }]),
+        createSnapshot('2026-05-01', { CNY: 1 }, [{ account, amount: 150 }]),
+      ],
+    };
+    const incoming = createSnapshot('2026-05-01', { CNY: 1 }, [{ account, amount: 300 }]);
+
+    const merged = importers.mergeImportedData(data, [incoming], data.accounts, 'overwrite');
+
+    expect(merged.snapshots).toHaveLength(1);
+    expect(merged.snapshots[0].entries[0].originalAmount).toBe(300);
+  });
+});
+
 describe('buildManualSnapshot', () => {
   it('reuses latest snapshot exchange rates, parses amounts, and turns blank values into null', () => {
     const usdAccount = createAccount('usd-cash', '美元现金', 'USD');
@@ -98,6 +169,30 @@ describe('buildManualSnapshot', () => {
       originalAmount: 100,
       exchangeRate: 7.24,
       amountCny: 724,
+    });
+  });
+
+  it('fills missing latest snapshot exchange rates from default exchange rates', () => {
+    const eurAccount = createAccount('eur-brokerage', '欧元券商', 'EUR');
+    const cnyAccount = createAccount('cny-cash', '人民币现金', 'CNY');
+    const data: AppData = {
+      ...createEmptyAppData(),
+      accounts: [eurAccount],
+      defaultExchangeRates: { CNY: 1, EUR: 8 },
+      snapshots: [createSnapshot('2026-04-01', { CNY: 1 }, [{ account: cnyAccount, amount: 100 }])],
+    };
+
+    const snapshot = buildManualSnapshot!(data, '2026-05-01', {
+      'eur-brokerage': '10',
+    });
+
+    expect(snapshot.exchangeRates).toEqual({ CNY: 1, EUR: 8 });
+    expect(snapshot.entries[0]).toMatchObject({
+      accountId: 'eur-brokerage',
+      currency: 'EUR',
+      originalAmount: 10,
+      exchangeRate: 8,
+      amountCny: 80,
     });
   });
 
