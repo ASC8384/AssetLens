@@ -162,9 +162,8 @@ export function mergeImportedData(data: AppData, imported: AssetSnapshot[], acco
   };
 }
 
-export function createManualSnapshot(data: AppData, date: string): AssetSnapshot {
-  const previous = data.snapshots[data.snapshots.length - 1];
-  const accounts = data.accounts.length > 0 ? data.accounts : previous?.entries.map((entry) => ({
+function manualSnapshotAccounts(data: AppData, previous: AssetSnapshot | undefined): AccountConfig[] {
+  return data.accounts.length > 0 ? data.accounts : previous?.entries.map((entry) => ({
     id: entry.accountId,
     name: entry.accountName,
     category: entry.category,
@@ -172,18 +171,27 @@ export function createManualSnapshot(data: AppData, date: string): AssetSnapshot
     includedInTotal: entry.includedInTotal,
     hidden: false,
   })) ?? [];
+}
+
+export function buildManualSnapshot(data: AppData, date: string, amountByAccountId: Record<string, string | undefined>): AssetSnapshot {
+  const previous = data.snapshots[data.snapshots.length - 1];
+  const accounts = manualSnapshotAccounts(data, previous);
   const exchangeRates = previous?.exchangeRates ?? data.defaultExchangeRates;
-  const previousEntries = new Map(previous?.entries.map((entry) => [entry.accountId, entry]) ?? []);
   return recalculateSnapshot({
     id: crypto.randomUUID(),
     date,
     exchangeRates: { ...exchangeRates },
-    entries: accounts.map((account) => {
-      const prior = previousEntries.get(account.id);
-      return buildEntry(account.name, prior?.originalAmount ?? null, null, account);
-    }),
+    entries: accounts.map((account) => buildEntry(account.name, parseNumber(amountByAccountId[account.id]), null, account)),
     computedTotalCny: 0,
   });
+}
+
+export function createManualSnapshot(data: AppData, date: string): AssetSnapshot {
+  const previous = data.snapshots[data.snapshots.length - 1];
+  const accounts = manualSnapshotAccounts(data, previous);
+  const previousEntries = new Map(previous?.entries.map((entry) => [entry.accountId, entry]) ?? []);
+  const amountByAccountId = Object.fromEntries(accounts.map((account) => [account.id, previousEntries.get(account.id)?.originalAmount?.toString() ?? '']));
+  return buildManualSnapshot(data, date, amountByAccountId);
 }
 
 function normalizeDate(value: string | undefined, rowIndex: number): string {
