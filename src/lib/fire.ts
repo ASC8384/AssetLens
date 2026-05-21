@@ -15,6 +15,8 @@ export type FireAnalysis = {
   fireProgress: number;
   fireGap: number;
   emergencyReserveMonths: number | null;
+  emergencyReserveTarget: number;
+  emergencyReserveGap: number;
   monthlyGrowth: number | null;
   estimatedMonthsToFire: number | null;
   expectedAnnualReturn: number;
@@ -45,6 +47,8 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
   const monthlyGrowth = averageMonthlyGrowth(snapshots);
   const totals = latest ? categoryTotals(latest, []) : null;
   const emergencyAssets = totals ? totals['现金'] + totals['银行卡'] : 0;
+  const emergencyReserveTarget = config.monthlyExpense * config.emergencyReserveMonthsTarget;
+  const emergencyReserveGap = Math.max(0, emergencyReserveTarget - emergencyAssets);
   return {
     currentNetWorth,
     annualExpense,
@@ -52,6 +56,8 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
     fireProgress: fireTarget === 0 ? 0 : currentNetWorth / fireTarget,
     fireGap,
     emergencyReserveMonths: config.monthlyExpense > 0 ? emergencyAssets / config.monthlyExpense : null,
+    emergencyReserveTarget,
+    emergencyReserveGap,
     monthlyGrowth,
     estimatedMonthsToFire: monthlyGrowth && monthlyGrowth > 0 ? Math.ceil(fireGap / monthlyGrowth) : null,
     expectedAnnualReturn: config.expectedAnnualReturn,

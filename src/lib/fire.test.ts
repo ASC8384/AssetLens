@@ -43,6 +43,9 @@ describe('FIRE analysis', () => {
     expect(result.fireProgress).toBeCloseTo(1000000 / (120000 / 0.035));
     expect(result.fireGap).toBeCloseTo(120000 / 0.035 - 1000000);
     expect(result.emergencyReserveMonths).toBe(30);
+    expect(result.emergencyReserveTarget).toBe(120000);
+    expect(result.emergencyReserveGap).toBe(0);
+    expect(result.fireTarget).toBeCloseTo(120000 / 0.035);
     expect(result.monthlyGrowth).toBe(100000);
   });
 
@@ -58,5 +61,19 @@ describe('FIRE analysis', () => {
     expect(result.forecasts.stressMonths).toBeNull();
     expect(result.expectedAnnualReturn).toBe(0.04);
     expect(result.monthlyGrowth).toBe(100000);
+  });
+
+  it('does not estimate return-only FIRE when assets or returns cannot compound', () => {
+    const noAsset = analyzeFire([snapshot('2026-01-01', 0)], createDefaultFireConfig());
+    const noReturn = analyzeFire([snapshot('2026-01-01', 1000000)], { ...createDefaultFireConfig(), expectedAnnualReturn: 0 });
+
+    expect(noAsset.forecasts.withReturnMonths).toBeNull();
+    expect(noReturn.forecasts.withReturnMonths).toBeNull();
+  });
+
+  it('returns zero return-only months when FIRE target is already reached', () => {
+    const result = analyzeFire([snapshot('2026-01-01', 4000000)], createDefaultFireConfig());
+
+    expect(result.forecasts.withReturnMonths).toBe(0);
   });
 });

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ConfigPanel } from './components/ConfigPanel';
 import { Dashboard } from './components/Dashboard';
+import { DataHealthCard } from './components/DataHealthCard';
 import { DetailsTable } from './components/DetailsTable';
 import { FireView } from './components/FireView';
-import { ImportCenter } from './components/ImportCenter';
+import { ImportCenter, type ImportCompletion } from './components/ImportCenter';
 import { ReviewReport } from './components/ReviewReport';
 import { TopBar } from './components/TopBar';
 import { StrategyPanel } from './components/StrategyPanel';
@@ -15,20 +16,41 @@ import './styles.css';
 export default function App() {
   const [data, setData] = useState<AppData>(() => loadAppData());
   const [notice, setNotice] = useState('');
+  const noticeTimerRef = useRef<number | null>(null);
   const activeTab = data.preferences.activeTab;
 
   useEffect(() => {
     saveAppData(data);
   }, [data]);
 
+  useEffect(() => () => {
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
+  }, []);
+
   function updateData(next: AppData, message = '已保存到本地浏览器') {
     setData(next);
     setNotice(message);
-    window.setTimeout(() => setNotice(''), 2400);
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = window.setTimeout(() => {
+      setNotice('');
+      noticeTimerRef.current = null;
+    }, 2400);
   }
 
   function setActiveTab(tab: AppData['preferences']['activeTab']) {
     setData({ ...data, preferences: { ...data.preferences, activeTab: tab } });
+  }
+
+  function handleImportComplete(completion: ImportCompletion) {
+    if (completion.dangerCount > 0) {
+      updateData({ ...completion.data, preferences: { ...completion.data.preferences, activeTab: 'details', detailMode: 'analysis' } }, `已导入 ${completion.snapshotCount} 期、${completion.accountCount} 个账户；发现 ${completion.dangerCount} 个严重异常，请在明细表检查。`);
+      return;
+    }
+    if (completion.isFirstImport) {
+      updateData({ ...completion.data, preferences: { ...completion.data.preferences, activeTab: 'dashboard' } }, `首次导入完成：已导入 ${completion.snapshotCount} 期、${completion.accountCount} 个账户，建议先看仪表盘。`);
+      return;
+    }
+    updateData({ ...completion.data, preferences: { ...completion.data.preferences, activeTab: 'dashboard' } }, `已导入 ${completion.snapshotCount} 期、${completion.accountCount} 个账户；可以查看仪表盘或生成复盘。`);
   }
 
   return (
@@ -43,8 +65,10 @@ export default function App() {
         </section>
       )}
 
+      <DataHealthCard data={data} onNavigate={setActiveTab} />
+
       <div className="control-strip three-column-controls">
-        <ImportCenter data={data} onChange={updateData} />
+        <ImportCenter data={data} onChange={updateData} onImportComplete={handleImportComplete} />
         <StrategyPanel data={data} onChange={updateData} />
         <ConfigPanel data={data} onChange={updateData} />
       </div>

@@ -9,8 +9,8 @@ import type { AppData } from '../lib/types';
 
 export function Dashboard({ data }: { data: AppData }) {
   const snapshots = data.snapshots;
-  const [selectedDate, setSelectedDate] = useState('');
-  const { selected, previous } = selectedSnapshotContext(snapshots, selectedDate);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState('');
+  const { selected, previous } = selectedSnapshotContext(snapshots, selectedSnapshotId);
   if (!selected) {
     return <EmptyState />;
   }
@@ -35,7 +35,7 @@ export function Dashboard({ data }: { data: AppData }) {
         <div className="hero-copy">
           <span className="eyebrow">PORTFOLIO RADAR</span>
           <h2>{formatMoney(selected.computedTotalCny)}</h2>
-          <p>{selectedDate ? '选中时点' : '最新净资产'} · {selected.date}</p>
+          <p>{selectedSnapshotId ? '选中时点' : '最新净资产'} · {selected.date}</p>
         </div>
         <div className="hero-orbit" aria-hidden="true">
           <span className="orbit-ring ring-one" />
@@ -53,11 +53,11 @@ export function Dashboard({ data }: { data: AppData }) {
 
       <div className="dashboard-timebar">
         <label>查看时间节点
-          <select value={selected?.date ?? ''} onChange={(event) => setSelectedDate(event.target.value)}>
-            {snapshots.map((snapshot) => <option key={snapshot.id} value={snapshot.date}>{snapshot.date}</option>)}
+          <select value={selected?.id ?? ''} onChange={(event) => setSelectedSnapshotId(event.target.value)}>
+            {snapshots.map((snapshot, index) => <option key={snapshot.id} value={snapshot.id}>{duplicateDateLabel(snapshots, snapshot, index)}</option>)}
           </select>
         </label>
-        <button onClick={() => setSelectedDate(snapshots[snapshots.length - 1]?.date ?? '')}>跳到最新</button>
+        <button onClick={() => setSelectedSnapshotId(snapshots[snapshots.length - 1]?.id ?? '')}>跳到最新</button>
       </div>
 
       <div className="insight-strip">
@@ -198,6 +198,12 @@ export function Dashboard({ data }: { data: AppData }) {
       </div>
     </section>
   );
+}
+
+function duplicateDateLabel(snapshots: AppData['snapshots'], snapshot: AppData['snapshots'][number], index: number): string {
+  const duplicateIndex = snapshots.slice(0, index + 1).filter((item) => item.date === snapshot.date).length;
+  const duplicateCount = snapshots.filter((item) => item.date === snapshot.date).length;
+  return duplicateCount > 1 ? `${snapshot.date} · 同日第 ${duplicateIndex} 条` : snapshot.date;
 }
 
 function Metric({ title, value, hint, tone }: { title: string; value: string; hint: string; tone?: 'positive' | 'negative' }) {

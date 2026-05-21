@@ -77,9 +77,33 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
             <div><span>当前净资产</span><strong>{formatMoney(analysis.currentNetWorth)}</strong></div>
             <div><span>年支出</span><strong>{formatMoney(analysis.annualExpense)}</strong></div>
             <div><span>历史净资产月均变化</span><strong>{formatMoney(analysis.monthlyGrowth)}</strong></div>
-            <div><span>按预期年化收益率</span><strong>{formatMonths(analysis.forecasts.withReturnMonths)}</strong></div>
             <div><span>现金/银行卡可支撑月数</span><strong>{analysis.emergencyReserveMonths === null ? '—' : `${formatNumber(analysis.emergencyReserveMonths, 1)} 个月`}</strong></div>
           </div>
+        </section>
+
+        <section className="chart-card fire-breakdown-card">
+          <h3>目标拆解</h3>
+          <div className="contribution-list">
+            <div><span>月支出</span><strong>{formatMoney(data.fire.monthlyExpense)}</strong></div>
+            <div><span>年支出</span><strong>{formatMoney(analysis.annualExpense)}</strong></div>
+            <div><span>安全提取率</span><strong>{formatPercent(data.fire.withdrawalRate)}</strong></div>
+            <div><span>FIRE 投资资产目标</span><strong>{formatMoney(analysis.fireTarget)}</strong></div>
+            <div><span>应急备用金目标</span><strong>{formatMoney(analysis.emergencyReserveTarget)}</strong></div>
+            <div><span>应急备用金缺口</span><strong>{formatMoney(analysis.emergencyReserveGap)}</strong></div>
+            <div><span>现金/银行卡可支撑月数</span><strong>{analysis.emergencyReserveMonths === null ? '—' : `${formatNumber(analysis.emergencyReserveMonths, 1)} 个月`}</strong></div>
+          </div>
+          <p className="muted">FIRE 目标按长期可投资资产估算；应急备用金单独检查。</p>
+        </section>
+
+        <section className="chart-card fire-path-card">
+          <h3>仅靠当前资产增长</h3>
+          <div className="contribution-list">
+            <div><span>当前资产</span><strong>{formatMoney(analysis.currentNetWorth)}</strong></div>
+            <div><span>目标资产</span><strong>{formatMoney(analysis.fireTarget)}</strong></div>
+            <div><span>预期年化收益率</span><strong>{formatPercent(analysis.expectedAnnualReturn)}</strong></div>
+            <div><span>预计达成时间</span><strong>{analysis.forecasts.withReturnMonths === null ? '无法按收益率单独估算' : formatMonths(analysis.forecasts.withReturnMonths)}</strong></div>
+          </div>
+          <p className="muted">不考虑未来新增投入，只看当前资产按预期收益率自然增长。</p>
         </section>
 
         <section className="chart-card">
