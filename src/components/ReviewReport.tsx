@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { AppData } from '../lib/types';
-import { accountContributionRows, availableReportRanges, generateMarkdownReport, snapshotsInRange, type ReportMode } from '../lib/report';
-import { categoryTotals } from '../lib/calculations';
-import { categories } from '../lib/defaults';
-import { formatMoney } from '../lib/format';
+import { availableReportRanges, buildStructuredReportSummary, generateMarkdownReport, snapshotsInRange, type ReportMode } from '../lib/report';
+import { formatMoney, formatPercent } from '../lib/format';
 
 export function ReviewReport({ data }: { data: AppData }) {
   const firstDate = data.snapshots[0]?.date ?? '';
@@ -13,10 +11,10 @@ export function ReviewReport({ data }: { data: AppData }) {
   const [mode, setMode] = useState<ReportMode>('endpoint');
   const ranges = useMemo(() => availableReportRanges(data), [data]);
   const selectedSnapshots = useMemo(() => snapshotsInRange(data, startDate || firstDate, endDate || lastDate), [data, startDate, endDate, firstDate, lastDate]);
-  const first = selectedSnapshots[0];
-  const last = selectedSnapshots[selectedSnapshots.length - 1];
-  const contributions = first && last ? accountContributionRows(first, last).slice(0, 8) : [];
-  const report = useMemo(() => generateMarkdownReport(data, startDate || firstDate, endDate || lastDate, mode), [data, startDate, endDate, mode, firstDate, lastDate]);
+  const effectiveStartDate = startDate || firstDate;
+  const effectiveEndDate = endDate || lastDate;
+  const summary = useMemo(() => buildStructuredReportSummary(data, effectiveStartDate, effectiveEndDate, mode), [data, effectiveStartDate, effectiveEndDate, mode]);
+  const report = useMemo(() => generateMarkdownReport(data, effectiveStartDate, effectiveEndDate, mode), [data, effectiveStartDate, effectiveEndDate, mode]);
 
   async function copyReport() {
     await navigator.clipboard.writeText(report);
@@ -42,25 +40,47 @@ export function ReviewReport({ data }: { data: AppData }) {
           <button onClick={copyReport}>复制 Markdown</button>
         </div>
       </div>
-      {first && last && (
-        <div className="report-insights">
-          <div className="chart-card">
-            <h3>账户贡献榜</h3>
-            <div className="contribution-list">
-              {contributions.map((row) => <div key={row.accountName}><span>{row.accountName}</span><strong className={row.change >= 0 ? 'positive' : 'negative'}>{formatMoney(row.change)}</strong></div>)}
-            </div>
-          </div>
-          <div className="chart-card">
-            <h3>资产结构变化</h3>
-            <div className="contribution-list">
-              {categories.map((category) => {
-                const start = categoryTotals(first, data.accounts)[category];
-                const end = categoryTotals(last, data.accounts)[category];
-                return <div key={category}><span>{category}</span><strong className={end - start >= 0 ? 'positive' : 'negative'}>{formatMoney(end - start)}</strong></div>;
-              })}
-            </div>
-          </div>
+      {summary.status === 'empty' ? (
+        <div className="chart-card report-empty-state">
+          <h3>当前范围没有记录</h3>
+          <p className="muted">{summary.message}</p>
         </div>
+      ) : (
+        <>
+          <div className="report-summary-grid">
+            <div className="chart-card"><span>复盘区间</span><strong>{summary.startDate} → {summary.endDate}</strong><small>{summary.snapshotCount} 期快照</small></div>
+            <div className="chart-card"><span>期初 / 期末</span><strong>{formatMoney(summary.startTotal)} → {formatMoney(summary.endTotal)}</strong><small>所选范围首尾快照</small></div>
+            <div className="chart-card"><span>总资产变化</span><strong className={(summary.totalChange ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(summary.totalChange)}</strong><small>{formatPercent(summary.growth)}</small></div>
+            <div className="chart-card"><span>风险资产占比变化</span><strong>{formatPercent(summary.riskAssetRatioChange.start)} → {formatPercent(summary.riskAssetRatioChange.end)}</strong><small>{formatPercent(summary.riskAssetRatioChange.change)}</small></div>
+          </div>
+
+          <div className="report-insights">
+            <div className="chart-card">
+              <h3>主要增长账户 Top 3</h3>
+              <div className="contribution-list">
+                {(summary.topIncreases.length > 0 ? summary.topIncreases : [{ accountName: '暂无增长账户', change: 0 }]).map((row) => <div key={row.accountName}><span>{row.accountName}</span><strong className={row.change >= 0 ? 'positive' : 'negative'}>{formatMoney(row.change)}</strong></div>)}
+              </div>
+            </div>
+            <div className="chart-card">
+              <h3>主要减少账户 Top 3</h3>
+              <div className="contribution-list">
+                {(summary.topDecreases.length > 0 ? summary.topDecreases : [{ accountName: '暂无减少账户', change: 0 }]).map((row) => <div key={row.accountName}><span>{row.accountName}</span><strong className={row.change >= 0 ? 'positive' : 'negative'}>{formatMoney(row.change)}</strong></div>)}
+              </div>
+            </div>
+            <div className="chart-card">
+              <h3>资产结构变化</h3>
+              <div className="contribution-list">
+                {summary.categoryChanges.map((row) => <div key={row.category}><span>{row.category}</span><strong className={row.change >= 0 ? 'positive' : 'negative'}>{formatMoney(row.change)}</strong><small>{formatMoney(row.start)} → {formatMoney(row.end)}</small></div>)}
+              </div>
+            </div>
+            <div className="chart-card">
+              <h3>数据质量提示</h3>
+              <div className="alert-list">
+                {summary.dataQualityMessages.map((message) => <div className="alert warning" key={message}><span>{message}</span></div>)}
+              </div>
+            </div>
+          </div>
+        </>
       )}
       <pre className="markdown-report">{report}</pre>
     </section>

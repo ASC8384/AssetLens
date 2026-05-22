@@ -61,6 +61,37 @@ describe('ImportCenter manual snapshot flow', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('can start manual input from an external request', () => {
+    const { rerender } = render(<ImportCenter data={createSampleData()} onChange={vi.fn()} manualInputRequest={0} />);
+
+    rerender(<ImportCenter data={createSampleData()} onChange={vi.fn()} manualInputRequest={1} />);
+
+    expect(screen.getAllByText('手动新增一期').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('复制来源')).toBeTruthy();
+  });
+
+  it('switches manual source between latest snapshot and blank amounts', () => {
+    render(<ImportCenter data={createSampleData()} onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('展开导入区'));
+    fireEvent.click(screen.getByText('开始手动输入'));
+    expect((screen.getByLabelText('基金账户A') as HTMLInputElement).value).toBe('59000');
+
+    fireEvent.change(screen.getByLabelText('复制来源'), { target: { value: 'blank' } });
+    expect((screen.getByLabelText('基金账户A') as HTMLInputElement).value).toBe('');
+  });
+
+  it('notifies when manual snapshot is created', () => {
+    const onManualSnapshotCreated = vi.fn();
+    render(<ImportCenter data={createSampleData()} onChange={vi.fn()} onManualSnapshotCreated={onManualSnapshotCreated} />);
+
+    fireEvent.click(screen.getByText('展开导入区'));
+    fireEvent.click(screen.getByText('开始手动输入'));
+    fireEvent.click(screen.getByText('保存'));
+
+    expect(onManualSnapshotCreated).toHaveBeenCalledWith(expect.objectContaining({ snapshots: expect.any(Array) }));
+  });
+
   it('shows a prompt instead of the full form when there are no accounts to fill', () => {
     render(<ImportCenter data={createEmptyAppData()} onChange={vi.fn()} />);
 

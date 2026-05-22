@@ -6,7 +6,17 @@ export type FireSpeedEstimate = {
   label: string;
   monthlyChange: number | null;
   projectedMonthsToFire: number | null;
+  startDate: string | null;
+  endDate: string | null;
+  months: number | null;
+  confidenceLabel: '样本不足' | '波动较大' | '无法外推' | '可参考';
+  note: string;
 };
+
+export type FireSensitivityRate = { label: string; withdrawalRate: number };
+export type FireSensitivityCell = { withdrawalRate: number; target: number; gap: number; progress: number; isCurrent: boolean };
+export type FireSensitivityRow = { label: string; expenseMultiplier: number; monthlyExpense: number; cells: FireSensitivityCell[] };
+export type FireSensitivityMatrix = { rates: FireSensitivityRate[]; rows: FireSensitivityRow[] };
 
 export type FireAnalysis = {
   currentNetWorth: number;
@@ -27,6 +37,7 @@ export type FireAnalysis = {
   };
   speedEstimates: FireSpeedEstimate[];
   scenarios: Array<{ label: string; withdrawalRate: number; target: number; gap: number }>;
+  sensitivityMatrix: FireSensitivityMatrix;
 };
 
 export function createDefaultFireConfig(): FireConfig {
@@ -36,6 +47,34 @@ export function createDefaultFireConfig(): FireConfig {
     emergencyReserveMonthsTarget: 12,
     expectedAnnualReturn: 0.04,
   };
+}
+
+export function fireSensitivityMatrix(config: FireConfig, currentNetWorth: number): FireSensitivityMatrix {
+  const rates = [0.03, 0.035, 0.04];
+  if (!rates.some((rate) => Math.abs(rate - config.withdrawalRate) < 0.000001)) rates.push(config.withdrawalRate);
+  const sortedRates = rates.sort((a, b) => a - b).map((rate) => ({ label: `${(rate * 100).toFixed(1)}%`, withdrawalRate: rate }));
+  const rows = [
+    { label: '支出 -20%', expenseMultiplier: 0.8 },
+    { label: '当前支出', expenseMultiplier: 1 },
+    { label: '支出 +20%', expenseMultiplier: 1.2 },
+  ].map((row) => {
+    const monthlyExpense = config.monthlyExpense * row.expenseMultiplier;
+    return {
+      ...row,
+      monthlyExpense,
+      cells: sortedRates.map(({ withdrawalRate }) => {
+        const target = withdrawalRate > 0 ? monthlyExpense * 12 / withdrawalRate : 0;
+        return {
+          withdrawalRate,
+          target,
+          gap: Math.max(0, target - currentNetWorth),
+          progress: target === 0 ? 0 : currentNetWorth / target,
+          isCurrent: row.expenseMultiplier === 1 && Math.abs(withdrawalRate - config.withdrawalRate) < 0.000001,
+        };
+      }),
+    };
+  });
+  return { rates: sortedRates, rows };
 }
 
 export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): FireAnalysis {
@@ -71,32 +110,61 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
       const target = annualExpense / rate;
       return { label: `${(rate * 100).toFixed(1)}%`, withdrawalRate: rate, target, gap: Math.max(0, target - currentNetWorth) };
     }),
+    sensitivityMatrix: fireSensitivityMatrix(config, currentNetWorth),
   };
 }
 
 export function fireSpeedEstimates(snapshots: AssetSnapshot[], fireTarget: number): FireSpeedEstimate[] {
-  const latest = latestIntervalEstimate(snapshots, fireTarget);
+  const allTimeMonthlyChange = snapshots.length >= 2 ? (snapshots[snapshots.length - 1].computedTotalCny - snapshots[0].computedTotalCny) / Math.max(1, monthDiff(snapshots[0].date, snapshots[snapshots.length - 1].date)) : null;
+  const latest = latestIntervalEstimate(snapshots, fireTarget, allTimeMonthlyChange);
   const lastYear = rangeEstimate(snapshots, fireTarget, 'lastYear', '近一年速度', 12);
   const allTime = rangeEstimate(snapshots, fireTarget, 'allTime', '历史以来速度');
   return [latest, lastYear, allTime];
 }
 
-function latestIntervalEstimate(snapshots: AssetSnapshot[], fireTarget: number): FireSpeedEstimate {
-  if (snapshots.length < 2) return { key: 'latest', label: '最近一次更新', monthlyChange: null, projectedMonthsToFire: null };
+function latestIntervalEstimate(snapshots: AssetSnapshot[], fireTarget: number, allTimeMonthlyChange: number | null): FireSpeedEstimate {
+  if (snapshots.length < 2) return emptySpeedEstimate('latest', '最近一次更新');
   const previous = snapshots[snapshots.length - 2];
   const latest = snapshots[snapshots.length - 1];
   const months = Math.max(1, monthDiff(previous.date, latest.date));
   const monthlyChange = (latest.computedTotalCny - previous.computedTotalCny) / months;
-  return { key: 'latest', label: '最近一次更新', monthlyChange, projectedMonthsToFire: monthsToFire(fireTarget, latest.computedTotalCny, monthlyChange) };
+  return createSpeedEstimate('latest', '最近一次更新', previous.date, latest.date, months, monthlyChange, fireTarget, latest.computedTotalCny, snapshots.length, allTimeMonthlyChange);
 }
 
 function rangeEstimate(snapshots: AssetSnapshot[], fireTarget: number, key: 'lastYear' | 'allTime', label: string, maxMonths?: number): FireSpeedEstimate {
-  if (snapshots.length < 2) return { key, label, monthlyChange: null, projectedMonthsToFire: null };
+  if (snapshots.length < 2) return emptySpeedEstimate(key, label);
   const latest = snapshots[snapshots.length - 1];
   const start = maxMonths === undefined ? snapshots[0] : findStartWithinMonths(snapshots, latest.date, maxMonths);
   const months = Math.max(1, monthDiff(start.date, latest.date));
   const monthlyChange = (latest.computedTotalCny - start.computedTotalCny) / months;
-  return { key, label, monthlyChange, projectedMonthsToFire: monthsToFire(fireTarget, latest.computedTotalCny, monthlyChange) };
+  return createSpeedEstimate(key, label, start.date, latest.date, months, monthlyChange, fireTarget, latest.computedTotalCny, snapshots.length, null);
+}
+
+function emptySpeedEstimate(key: FireSpeedEstimate['key'], label: string): FireSpeedEstimate {
+  return { key, label, monthlyChange: null, projectedMonthsToFire: null, startDate: null, endDate: null, months: null, confidenceLabel: '样本不足', note: '至少需要两期快照。' };
+}
+
+function createSpeedEstimate(key: FireSpeedEstimate['key'], label: string, startDate: string, endDate: string, months: number, monthlyChange: number, fireTarget: number, currentNetWorth: number, snapshotCount: number, allTimeMonthlyChange: number | null): FireSpeedEstimate {
+  const confidence = speedConfidence(key, months, monthlyChange, snapshotCount, allTimeMonthlyChange);
+  return {
+    key,
+    label,
+    monthlyChange,
+    projectedMonthsToFire: monthsToFire(fireTarget, currentNetWorth, monthlyChange),
+    startDate,
+    endDate,
+    months,
+    ...confidence,
+  };
+}
+
+function speedConfidence(key: FireSpeedEstimate['key'], months: number, monthlyChange: number, snapshotCount: number, allTimeMonthlyChange: number | null): Pick<FireSpeedEstimate, 'confidenceLabel' | 'note'> {
+  if (monthlyChange <= 0) return { confidenceLabel: '无法外推', note: '当前速度无法外推到 FIRE。' };
+  if (key === 'latest' && snapshotCount >= 3 && allTimeMonthlyChange !== null && Math.abs(monthlyChange) > Math.abs(allTimeMonthlyChange) * 2) {
+    return { confidenceLabel: '波动较大', note: '最近一次变化可能受单次大额波动影响。' };
+  }
+  if (months < 3) return { confidenceLabel: '样本不足', note: '样本跨度少于 3 个月。' };
+  return { confidenceLabel: '可参考', note: '仍需结合市场波动和主动投入理解。' };
 }
 
 function findStartWithinMonths(snapshots: AssetSnapshot[], latestDate: string, months: number): AssetSnapshot {

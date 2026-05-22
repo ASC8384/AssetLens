@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeFire, createDefaultFireConfig, fireSpeedEstimates } from './fire';
+import { analyzeFire, createDefaultFireConfig, fireSensitivityMatrix, fireSpeedEstimates } from './fire';
 import { recalculateSnapshot } from './calculations';
 import type { AssetSnapshot } from './types';
 
@@ -17,7 +17,52 @@ function snapshot(date: string, total: number): AssetSnapshot {
   });
 }
 
+describe('FIRE sensitivity matrix', () => {
+  it('builds a FIRE sensitivity matrix from expense multipliers and withdrawal rates', () => {
+    const matrix = fireSensitivityMatrix(createDefaultFireConfig(), 1000000);
+
+    expect(matrix.rows).toHaveLength(3);
+    expect(matrix.rates.map((rate) => rate.withdrawalRate)).toEqual([0.03, 0.035, 0.04]);
+    expect(matrix.rows[1]).toMatchObject({ label: '当前支出', monthlyExpense: 10000 });
+    expect(matrix.rows[1].cells[1]).toMatchObject({
+      target: 120000 / 0.035,
+      gap: 120000 / 0.035 - 1000000,
+      isCurrent: true,
+    });
+  });
+
+  it('includes the current withdrawal rate when it is not one of the fixed matrix rates', () => {
+    const matrix = fireSensitivityMatrix({ ...createDefaultFireConfig(), withdrawalRate: 0.033 }, 1000000);
+
+    expect(matrix.rates.map((rate) => rate.withdrawalRate)).toContain(0.033);
+    expect(matrix.rows.flatMap((row) => row.cells).some((cell) => cell.isCurrent)).toBe(true);
+  });
+});
+
 describe('FIRE speed estimates', () => {
+  it('marks short history speed estimates as sample-limited', () => {
+    const estimates = fireSpeedEstimates([
+      snapshot('2026-01-01', 1000000),
+      snapshot('2026-02-01', 1100000),
+    ], 2000000);
+
+    expect(estimates[0]).toMatchObject({ confidenceLabel: '样本不足', months: 1 });
+    expect(estimates[1]).toMatchObject({ confidenceLabel: '样本不足' });
+  });
+
+  it('marks latest speed as volatile when it is much larger than all-time speed', () => {
+    const estimates = fireSpeedEstimates([
+      snapshot('2025-01-01', 1000000),
+      snapshot('2025-07-01', 1060000),
+      snapshot('2026-01-01', 1120000),
+      snapshot('2026-02-01', 1600000),
+    ], 2000000);
+
+    expect(estimates.find((estimate) => estimate.key === 'latest')).toMatchObject({
+      confidenceLabel: '波动较大',
+    });
+  });
+
   it('estimates months to FIRE from latest interval, last year and all history speeds', () => {
     const snapshots = [
       snapshot('2025-01-01', 1000000),
@@ -47,6 +92,14 @@ describe('FIRE analysis', () => {
     expect(result.emergencyReserveGap).toBe(0);
     expect(result.fireTarget).toBeCloseTo(120000 / 0.035);
     expect(result.monthlyGrowth).toBe(100000);
+  });
+
+  it('keeps historical speed independent from expected annual return', () => {
+    const snapshots = [snapshot('2025-01-01', 1000000), snapshot('2026-01-01', 1300000)];
+    const lowReturn = analyzeFire(snapshots, { ...createDefaultFireConfig(), expectedAnnualReturn: 0.01 });
+    const highReturn = analyzeFire(snapshots, { ...createDefaultFireConfig(), expectedAnnualReturn: 0.08 });
+
+    expect(highReturn.speedEstimates).toEqual(lowReturn.speedEstimates);
   });
 
   it('uses expected annual return for return-only FIRE estimate without future contribution assumptions', () => {

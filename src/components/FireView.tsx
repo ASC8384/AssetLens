@@ -110,23 +110,46 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
           <h3>历史速度估算</h3>
           <div className="contribution-list">
             {analysis.speedEstimates.map((estimate) => (
-              <div key={estimate.key}>
+              <div key={estimate.key} className="speed-estimate-row">
                 <span>{estimate.label}</span>
                 <strong>{formatMonths(estimate.projectedMonthsToFire)}</strong>
                 <small>月均变化 {formatMoney(estimate.monthlyChange)}</small>
+                <small>{estimate.startDate && estimate.endDate ? `${estimate.startDate} → ${estimate.endDate}` : '等待更多快照'}{estimate.months !== null ? ` · 约 ${estimate.months} 个月` : ''}</small>
+                <small>可信度 <span className="confidence-pill">{estimate.confidenceLabel}</span></small>
+                <small>{estimate.note}</small>
               </div>
             ))}
           </div>
           <p className="muted">仅按资产快照变化外推，可能受市场波动、奖金、大额支出和收入变化影响。</p>
         </section>
 
-        <section className="chart-card">
-          <h3>提取率场景</h3>
-          <div className="contribution-list">
-            {analysis.scenarios.map((scenario) => (
-              <div key={scenario.label}><span>{scenario.label}</span><strong>{formatMoney(scenario.target)}</strong><small>缺口 {formatMoney(scenario.gap)}</small></div>
-            ))}
+        <section className="chart-card fire-sensitivity-card">
+          <h3>FIRE 敏感性矩阵</h3>
+          <div className="sensitivity-table-wrap">
+            <table className="sensitivity-table">
+              <thead>
+                <tr>
+                  <th>月支出情境</th>
+                  {analysis.sensitivityMatrix.rates.map((rate) => <th key={rate.label}>{rate.label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.sensitivityMatrix.rows.map((row) => (
+                  <tr key={row.label}>
+                    <th>{row.label}<small>{formatMoney(row.monthlyExpense)}/月</small></th>
+                    {row.cells.map((cell) => (
+                      <td key={`${row.label}-${cell.withdrawalRate}`} className={cell.isCurrent ? 'current-sensitivity-cell' : ''}>
+                        {cell.isCurrent && <span className="confidence-pill">当前配置</span>}
+                        <strong>{formatMoney(cell.target)}</strong>
+                        <small>缺口 {formatMoney(cell.gap)}</small>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+          <p className="muted">目标资产按年支出 / 安全提取率计算，不包含未来新增投入。</p>
         </section>
       </div>
     </section>

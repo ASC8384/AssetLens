@@ -254,7 +254,12 @@ th.sticky-col { background: #f4efe6; z-index: 3; }
 .markdown-report { white-space: pre-wrap; background: #0b1322; color: #e2e8f0; border-radius: 18px; padding: 20px; line-height: 1.7; overflow: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
 .report-view label { display: flex; align-items: center; gap: 6px; color: #475467; }
 .range-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
-.report-insights { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.report-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+.report-summary-grid .chart-card { display: grid; gap: 5px; }
+.report-summary-grid span, .report-summary-grid small { color: var(--muted); }
+.report-summary-grid strong { color: var(--navy); font-size: 20px; }
+.report-empty-state { margin-bottom: 16px; }
+.report-insights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
 .contribution-list { display: grid; gap: 10px; }
 .contribution-list div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .recharts-default-tooltip { border-radius: 14px !important; border: 1px solid var(--line) !important; box-shadow: 0 16px 36px rgba(16,35,63,.14) !important; }
@@ -269,7 +274,15 @@ th.sticky-col { background: #f4efe6; z-index: 3; }
 .fire-settings { display: grid; gap: 12px; }
 .fire-settings label { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .fire-settings input { width: 130px; }
-.fire-breakdown-card .muted, .fire-path-card .muted { margin-top: 12px; line-height: 1.5; }
+.fire-breakdown-card .muted, .fire-path-card .muted, .fire-sensitivity-card .muted { margin-top: 12px; line-height: 1.5; }
+.sensitivity-table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 16px; }
+.sensitivity-table th, .sensitivity-table td { white-space: normal; vertical-align: top; }
+.sensitivity-table th small, .sensitivity-table td small { display: block; color: var(--muted); margin-top: 4px; }
+.sensitivity-table td strong { display: block; color: var(--navy); }
+.current-sensitivity-cell { background: rgba(18,184,166,.12); box-shadow: inset 0 0 0 1px rgba(18,184,166,.24); }
+.confidence-pill { display: inline-flex; width: fit-content; margin-bottom: 6px; padding: 3px 8px; border-radius: 999px; background: rgba(34,102,255,.1); color: var(--blue); font-weight: 800; font-size: 12px; }
+.speed-estimate-row { display: grid !important; grid-template-columns: 1fr auto; align-items: start; }
+.speed-estimate-row small { grid-column: 1 / -1; }
 .fire-hero { margin-top: 0; }
 @media (max-width: 1200px) { .fire-grid { grid-template-columns: 1fr; } }
 .fire-hero-visual { align-items: center; }

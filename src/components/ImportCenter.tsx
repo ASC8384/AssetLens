@@ -1,12 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { buildManualSnapshot, buildSnapshotsFromDraft, createImportDraft, mergeImportedData, parseExcelFile, parsePastedTable } from '../lib/importers';
 import { analyzeImportQuality, ignoreTotalColumns } from '../lib/importQuality';
 import { formatMoney, formatPercent } from '../lib/format';
 import type { AccountConfig, AppData, DuplicateDateMode, FieldMapping, ImportDraft } from '../lib/types';
 import { categories } from '../lib/defaults';
 
+type ManualSource = 'latest' | 'blank';
+
 type ManualDraft = {
   date: string;
+  source: ManualSource;
   amountByAccountId: Record<string, string>;
 };
 
@@ -39,16 +42,22 @@ function manualAccounts(data: AppData): AccountConfig[] {
   })) ?? [];
 }
 
-function createManualDraft(data: AppData, accounts: AccountConfig[]): ManualDraft {
+function manualAmountDefaults(data: AppData, accounts: AccountConfig[], source: ManualSource): Record<string, string> {
+  if (source === 'blank') return Object.fromEntries(accounts.map((account) => [account.id, '']));
   const previous = data.snapshots[data.snapshots.length - 1];
   const previousEntries = new Map(previous?.entries.map((entry) => [entry.accountId, entry]) ?? []);
+  return Object.fromEntries(accounts.map((account) => [account.id, previousEntries.get(account.id)?.originalAmount?.toString() ?? '']));
+}
+
+function createManualDraft(data: AppData, accounts: AccountConfig[], source: ManualSource = 'latest'): ManualDraft {
   return {
     date: todayString(),
-    amountByAccountId: Object.fromEntries(accounts.map((account) => [account.id, previousEntries.get(account.id)?.originalAmount?.toString() ?? ''])),
+    source,
+    amountByAccountId: manualAmountDefaults(data, accounts, source),
   };
 }
 
-export function ImportCenter({ data, onChange, onImportComplete }: { data: AppData; onChange: (data: AppData, message?: string) => void; onImportComplete?: (completion: ImportCompletion) => void }) {
+export function ImportCenter({ data, onChange, onImportComplete, manualInputRequest = 0, onManualSnapshotCreated }: { data: AppData; onChange: (data: AppData, message?: string) => void; onImportComplete?: (completion: ImportCompletion) => void; manualInputRequest?: number; onManualSnapshotCreated?: (data: AppData) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState<ImportDraft | null>(null);
   const [manualDraft, setManualDraft] = useState<ManualDraft | null>(null);
@@ -57,6 +66,14 @@ export function ImportCenter({ data, onChange, onImportComplete }: { data: AppDa
   const importedPreview = useMemo(() => draft ? buildSnapshotsFromDraft(draft, data.accounts) : null, [draft, data.accounts]);
   const importQuality = useMemo(() => importedPreview ? analyzeImportQuality(importedPreview.snapshots, importedPreview.accounts.length) : null, [importedPreview]);
   const manualAccountList = useMemo(() => manualAccounts(data), [data]);
+
+  useEffect(() => {
+    if (manualInputRequest <= 0) return;
+    setExpanded(true);
+    setDraft(null);
+    setDuplicateMode('overwrite');
+    setManualDraft(createManualDraft(data, manualAccountList));
+  }, [manualInputRequest, data, manualAccountList]);
 
   async function handleFile(file: File | null) {
     if (!file) return;
@@ -93,6 +110,15 @@ export function ImportCenter({ data, onChange, onImportComplete }: { data: AppDa
     });
   }
 
+  function updateManualSource(source: ManualSource) {
+    if (!manualDraft) return;
+    setManualDraft({
+      ...manualDraft,
+      source,
+      amountByAccountId: manualAmountDefaults(data, manualAccountList, source),
+    });
+  }
+
   function confirmImport() {
     if (!draft) return;
     const imported = buildSnapshotsFromDraft(draft, data.accounts);
@@ -117,7 +143,12 @@ export function ImportCenter({ data, onChange, onImportComplete }: { data: AppDa
   function confirmManualInput() {
     if (!manualDraft?.date || manualAccountList.length === 0) return;
     const snapshot = buildManualSnapshot(data, manualDraft.date, manualDraft.amountByAccountId);
-    onChange(mergeImportedData(data, [snapshot], manualAccountList, duplicateMode));
+    const nextData = mergeImportedData(data, [snapshot], manualAccountList, duplicateMode);
+    if (onManualSnapshotCreated) {
+      onManualSnapshotCreated(nextData);
+    } else {
+      onChange(nextData);
+    }
     setManualDraft(null);
   }
 
@@ -160,6 +191,12 @@ export function ImportCenter({ data, onChange, onImportComplete }: { data: AppDa
             <div className="toolbar compact-toolbar">
               {manualAccountList.length > 0 && (
                 <>
+                  <label>复制来源
+                    <select aria-label="复制来源" value={manualDraft.source} onChange={(event) => updateManualSource(event.target.value as ManualSource)}>
+                      <option value="latest">复制最新一期</option>
+                      <option value="blank">空白金额</option>
+                    </select>
+                  </label>
                   <select aria-label="重复日期处理方式" value={duplicateMode} onChange={(event) => setDuplicateMode(event.target.value as DuplicateDateMode)}>
                     <option value="overwrite">重复日期覆盖</option>
                     <option value="keep">重复日期保留新记录</option>

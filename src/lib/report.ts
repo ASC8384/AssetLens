@@ -3,6 +3,7 @@ import { accountChanges, categoryTotals } from './calculations';
 import { categories } from './defaults';
 import { formatMoney, formatPercent } from './format';
 import { analyzeStrategy } from './strategy';
+import { totalQuality } from './dashboard';
 
 export type ReportMode = 'endpoint' | 'periodic';
 
@@ -10,6 +11,23 @@ export type ReportRange = {
   label: string;
   startDate: string;
   endDate: string;
+};
+
+export type StructuredReportSummary = {
+  status: 'ready' | 'empty';
+  message: string;
+  startDate: string | null;
+  endDate: string | null;
+  snapshotCount: number;
+  startTotal: number | null;
+  endTotal: number | null;
+  totalChange: number | null;
+  growth: number | null;
+  topIncreases: Array<{ accountName: string; change: number }>;
+  topDecreases: Array<{ accountName: string; change: number }>;
+  categoryChanges: Array<{ category: AssetCategory; start: number; end: number; change: number }>;
+  riskAssetRatioChange: { start: number | null; end: number | null; change: number | null };
+  dataQualityMessages: string[];
 };
 
 export function availableReportRanges(data: AppData): ReportRange[] {
@@ -36,6 +54,72 @@ export function snapshotsInRange(data: AppData, startDate: string, endDate: stri
     if (endDate && snapshot.date > endDate) return false;
     return true;
   });
+}
+
+export function buildStructuredReportSummary(data: AppData, startDate: string, endDate: string, mode: ReportMode): StructuredReportSummary {
+  const snapshots = snapshotsInRange(data, startDate, endDate);
+  if (snapshots.length === 0) {
+    return {
+      status: 'empty',
+      message: '当前时间范围内没有资产记录。',
+      startDate: null,
+      endDate: null,
+      snapshotCount: 0,
+      startTotal: null,
+      endTotal: null,
+      totalChange: null,
+      growth: null,
+      topIncreases: [],
+      topDecreases: [],
+      categoryChanges: [],
+      riskAssetRatioChange: { start: null, end: null, change: null },
+      dataQualityMessages: ['当前时间范围内没有资产记录。'],
+    };
+  }
+
+  const first = snapshots[0];
+  const last = snapshots[snapshots.length - 1];
+  const startTotal = first.computedTotalCny;
+  const endTotal = last.computedTotalCny;
+  const totalChange = endTotal - startTotal;
+  const startTotals = categoryTotals(first, data.accounts);
+  const endTotals = categoryTotals(last, data.accounts);
+  const contributionRows = accountContributionRows(first, last);
+  const topIncreases = contributionRows.filter((row) => row.change > 0).slice(0, 3);
+  const topDecreases = [...contributionRows].reverse().filter((row) => row.change < 0).slice(0, 3);
+  const startRiskRatio = startTotal === 0 ? null : (startTotals['基金'] + startTotals['证券']) / startTotal;
+  const endRiskRatio = endTotal === 0 ? null : (endTotals['基金'] + endTotals['证券']) / endTotal;
+  const qualityMessages = dataQualityMessages(snapshots);
+
+  return {
+    status: 'ready',
+    message: mode === 'periodic' ? '结构化摘要基于所选范围内逐期快照生成。' : '结构化摘要基于所选范围的期初与期末生成。',
+    startDate: first.date,
+    endDate: last.date,
+    snapshotCount: snapshots.length,
+    startTotal,
+    endTotal,
+    totalChange,
+    growth: startTotal === 0 ? null : totalChange / startTotal,
+    topIncreases,
+    topDecreases,
+    categoryChanges: categories.map((category) => ({ category, start: startTotals[category], end: endTotals[category], change: endTotals[category] - startTotals[category] })),
+    riskAssetRatioChange: {
+      start: startRiskRatio,
+      end: endRiskRatio,
+      change: startRiskRatio === null || endRiskRatio === null ? null : endRiskRatio - startRiskRatio,
+    },
+    dataQualityMessages: qualityMessages,
+  };
+}
+
+function dataQualityMessages(snapshots: AssetSnapshot[]): string[] {
+  if (snapshots.length < 2) return ['当前范围只有一期快照，变化分析有限。'];
+  if (snapshots.some((snapshot) => {
+    const quality = totalQuality(snapshot);
+    return quality.status === 'danger' || quality.status === 'warning';
+  })) return ['发现合计差异，建议先检查明细表。'];
+  return ['数据质量未发现明显异常。'];
 }
 
 export function generateMarkdownReport(data: AppData, startDate: string, endDate: string, mode: ReportMode): string {
