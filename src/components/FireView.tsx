@@ -71,8 +71,8 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
           <label><span>预期年化收益率%</span><input type="number" step="0.1" value={formatNumber(data.fire.expectedAnnualReturn * 100, 1)} onChange={(event) => updateFireNumber('expectedAnnualReturn', event.target.value)} /></label>
         </section>
 
-        <section className="chart-card">
-          <h3>核心指标</h3>
+        <section className="chart-card fire-core-card">
+          <h3>FIRE 核心假设</h3>
           <div className="contribution-list">
             <div><span>当前净资产</span><strong>{formatMoney(analysis.currentNetWorth)}</strong></div>
             <div><span>年支出</span><strong>{formatMoney(analysis.annualExpense)}</strong></div>
@@ -95,18 +95,7 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
           <p className="muted">FIRE 目标按长期可投资资产估算；应急备用金单独检查。</p>
         </section>
 
-        <section className="chart-card fire-path-card">
-          <h3>仅靠当前资产增长</h3>
-          <div className="contribution-list">
-            <div><span>当前资产</span><strong>{formatMoney(analysis.currentNetWorth)}</strong></div>
-            <div><span>目标资产</span><strong>{formatMoney(analysis.fireTarget)}</strong></div>
-            <div><span>预期年化收益率</span><strong>{formatPercent(analysis.expectedAnnualReturn)}</strong></div>
-            <div><span>预计达成时间</span><strong>{analysis.forecasts.withReturnMonths === null ? '无法按收益率单独估算' : formatMonths(analysis.forecasts.withReturnMonths)}</strong></div>
-          </div>
-          <p className="muted">不考虑未来新增投入，只看当前资产按预期收益率自然增长。</p>
-        </section>
-
-        <section className="chart-card">
+        <section className="chart-card fire-history-card">
           <h3>历史速度估算</h3>
           <div className="contribution-list">
             {analysis.speedEstimates.map((estimate) => (
@@ -124,7 +113,23 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
         </section>
 
         <section className="chart-card fire-sensitivity-card">
-          <h3>FIRE 敏感性矩阵</h3>
+          <div className="sensitivity-header">
+            <div>
+              <h3>FIRE 敏感性矩阵</h3>
+              <p className="muted">把支出和安全提取率放在同一张决策地图里，优先看当前配置附近的格子。</p>
+            </div>
+            <div className="sensitivity-focus-card">
+              <span>仅靠当前资产增长</span>
+              <strong>{analysis.forecasts.withReturnMonths === null ? '无法按收益率单独估算' : formatMonths(analysis.forecasts.withReturnMonths)}</strong>
+              <small>当前资产 {formatMoney(analysis.currentNetWorth)} · 预期收益 {formatPercent(analysis.expectedAnnualReturn)}</small>
+            </div>
+          </div>
+          <h4 className="sensitivity-guide-title">矩阵阅读方式</h4>
+          <div className="sensitivity-reading-guide">
+            <div><span>横向比较</span><strong>同一支出下提取率越低，目标资产越高。</strong></div>
+            <div><span>纵向比较</span><strong>同一提取率下支出越高，缺口越大。</strong></div>
+            <div><span>当前配置</span><strong>绿色高亮是当前月支出和安全提取率。</strong></div>
+          </div>
           <div className="sensitivity-table-wrap">
             <table className="sensitivity-table">
               <thead>
