@@ -38,6 +38,34 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
     onChange({ ...data, snapshots });
   }
 
+  function updateEntryCurrency(snapshotId: string, accountId: string, value: string) {
+    const currency = value.trim().toUpperCase();
+    if (!currency) return;
+    const snapshots = data.snapshots.map((snapshot) => {
+      if (snapshot.id !== snapshotId) return snapshot;
+      const entry = snapshot.entries.find((item) => item.accountId === accountId);
+      const rate = currency === 'CNY' ? 1 : snapshot.exchangeRates[currency] ?? data.defaultExchangeRates[currency] ?? entry?.exchangeRate ?? null;
+      return recalculateSnapshot({
+        ...snapshot,
+        exchangeRates: rate === null ? snapshot.exchangeRates : { ...snapshot.exchangeRates, [currency]: rate },
+        entries: snapshot.entries.map((item) => item.accountId === accountId ? { ...item, currency } : item),
+      });
+    });
+    onChange({ ...data, snapshots });
+  }
+
+  function updateEntryRate(snapshotId: string, accountId: string, value: string) {
+    const rate = Number(value);
+    if (!Number.isFinite(rate)) return;
+    const snapshots = data.snapshots.map((snapshot) => {
+      if (snapshot.id !== snapshotId) return snapshot;
+      const currency = snapshot.entries.find((entry) => entry.accountId === accountId)?.currency;
+      if (!currency || currency === 'CNY') return snapshot;
+      return recalculateSnapshot({ ...snapshot, exchangeRates: { ...snapshot.exchangeRates, [currency]: rate } });
+    });
+    onChange({ ...data, snapshots });
+  }
+
   function deleteSnapshot(snapshotId: string) {
     if (!window.confirm('确定删除这一期记录吗？')) return;
     onChange({ ...data, snapshots: data.snapshots.filter((snapshot) => snapshot.id !== snapshotId) });
@@ -176,8 +204,8 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
                     }
                     return [
                       <td key={`${account.id}-amount`}><input value={entry?.originalAmount ?? ''} onChange={(event) => updateAmount(snapshot.id, account.id, event.target.value)} /></td>,
-                      <td key={`${account.id}-currency`}>{entry?.currency ?? account.defaultCurrency}</td>,
-                      <td key={`${account.id}-rate`}>{entry?.exchangeRate ?? '缺失'}</td>,
+                      <td key={`${account.id}-currency`}><input aria-label={`${snapshot.date}-${account.name}-币种`} value={entry?.currency ?? account.defaultCurrency} onChange={(event) => updateEntryCurrency(snapshot.id, account.id, event.target.value)} /></td>,
+                      <td key={`${account.id}-rate`}><input aria-label={`${snapshot.date}-${account.name}-汇率`} value={entry?.exchangeRate ?? ''} disabled={(entry?.currency ?? account.defaultCurrency) === 'CNY'} onChange={(event) => updateEntryRate(snapshot.id, account.id, event.target.value)} /></td>,
                       <td key={`${account.id}-cny`}>{formatMoney(entry?.amountCny)}</td>,
                     ];
                   })}
