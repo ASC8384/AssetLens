@@ -67,6 +67,7 @@ export function createEmptyAppData(): AppData {
     preferences: {
       activeTab: 'dashboard',
       detailMode: 'compact',
+      detailIssueFilter: 'all',
       categoryFilter: '全部',
     },
   };

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { accountChanges, categoryTotals, totalChange } from '../lib/calculations';
-import { accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, riskTrendData, selectedSnapshotContext } from '../lib/dashboard';
+import { accountInsightSummary, accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, riskTrendData, selectedSnapshotContext } from '../lib/dashboard';
 import { categories, categoryColors } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
 import { analyzeStrategy } from '../lib/strategy';
@@ -27,6 +27,7 @@ export function Dashboard({ data }: { data: AppData }) {
   const categoryChanges = categoryChangeRows(previous, selected).filter((row) => row.change !== 0);
   const comparisonLabel = previous ? `${previous.date} → ${selected.date}` : `${selected.date} 无前一期`;
   const summary = dashboardSummary({ ...data, snapshots: [selected] });
+  const accountInsights = accountInsightSummary(previous, selected);
   const strategy = analyzeStrategy(selected, data.strategy);
 
   return (
@@ -171,6 +172,33 @@ export function Dashboard({ data }: { data: AppData }) {
       </div>
 
       <div className="chart-grid secondary-charts">
+        <ChartCard title="账户洞察" className="account-insight-card">
+          <div className="account-insight-grid">
+            <div>
+              <h4>增长账户 Top 5</h4>
+              <div className="contribution-list">
+                {(accountInsights.topIncreases.length > 0 ? accountInsights.topIncreases : [{ accountName: '暂无增长账户', change: 0 }]).map((row) => <div key={row.accountName}><span>{row.accountName}</span><strong className="positive">{formatMoney(row.change)}</strong></div>)}
+              </div>
+            </div>
+            <div>
+              <h4>下降账户 Top 5</h4>
+              <div className="contribution-list">
+                {(accountInsights.topDecreases.length > 0 ? accountInsights.topDecreases : [{ accountName: '暂无下降账户', change: 0 }]).map((row) => <div key={row.accountName}><span>{row.accountName}</span><strong className="negative">{formatMoney(row.change)}</strong></div>)}
+              </div>
+            </div>
+            <div>
+              <h4>账户集中度</h4>
+              <strong>{formatPercent(accountInsights.concentrationRatio)}</strong>
+              <small>当前 Top 3 账户占总资产比例</small>
+            </div>
+            <div>
+              <h4>账户变化</h4>
+              <small>新增：{accountInsights.newAccounts.length > 0 ? accountInsights.newAccounts.join('、') : '无'}</small>
+              <small>消失：{accountInsights.removedAccounts.length > 0 ? accountInsights.removedAccounts.join('、') : '无'}</small>
+            </div>
+          </div>
+        </ChartCard>
+
         <ChartCard title="大类资产堆叠趋势">
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={trendData}>

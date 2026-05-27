@@ -37,6 +37,15 @@ describe('Dashboard', () => {
     expect(screen.queryByText(/合计列可能识别错/)).toBeNull();
   });
 
+  it('renders account insight summary for the selected snapshot', () => {
+    render(<Dashboard data={createSampleData()} />);
+
+    expect(screen.getByText('账户洞察')).toBeTruthy();
+    expect(screen.getByText('增长账户 Top 5')).toBeTruthy();
+    expect(screen.getByText('下降账户 Top 5')).toBeTruthy();
+    expect(screen.getByText('账户集中度')).toBeTruthy();
+  });
+
   it('labels duplicate-date snapshots so users can distinguish kept imports', () => {
     const data = {
       ...createSampleData(),

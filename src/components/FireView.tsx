@@ -63,6 +63,25 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
       </section>
 
       <div className="fire-grid">
+        <section className="chart-card fire-decision-card">
+          <div>
+            <span className="eyebrow">FIRE DECISION</span>
+            <h3>FIRE 结论摘要</h3>
+            <p className="muted">当前最值得关注的是目标缺口、预计目标年月和变量影响。</p>
+          </div>
+          <div className="fire-decision-grid">
+            <div><span>距离目标</span><strong>{formatMoney(analysis.decisionSummary.fireGap)}</strong><small>{analysis.decisionSummary.nextActions[0]}</small></div>
+            <div><span>预计目标年月</span><strong>{analysis.decisionSummary.targetYearMonth ?? '暂无法估算'}</strong><small>仅靠当前资产增长路径</small></div>
+            <div><span>应急备用金</span><strong>{analysis.decisionSummary.emergencyStatus}</strong><small>应急金单独检查，不并入 FIRE 目标</small></div>
+          </div>
+          <div className="variable-impact-list">
+            <h4>变量影响排行</h4>
+            {analysis.decisionSummary.variableImpacts.map((impact) => (
+              <div key={impact.label}><span>{impact.label}</span><strong className={impact.amount >= 0 ? 'negative' : 'positive'}>{impact.amount >= 0 ? '+' : ''}{formatMoney(impact.amount)}</strong></div>
+            ))}
+          </div>
+        </section>
+
         <section className="chart-card fire-settings">
           <h3>FIRE 设置</h3>
           <label><span>月支出</span><input type="number" value={data.fire.monthlyExpense} onChange={(event) => updateFireNumber('monthlyExpense', event.target.value)} /></label>

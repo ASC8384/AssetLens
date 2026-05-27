@@ -56,6 +56,7 @@ export type AppData = {
   preferences: {
     activeTab: 'dashboard' | 'details' | 'report' | 'fire';
     detailMode: 'compact' | 'analysis';
+    detailIssueFilter: 'all' | 'issues-only';
     categoryFilter: AssetCategory | '全部';
   };
 };

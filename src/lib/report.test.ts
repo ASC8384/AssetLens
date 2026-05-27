@@ -28,7 +28,7 @@ const data: AppData = {
     targetCategoryRatios: { 基金: 0.4, 现金: 0.2 },
   },
   fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
-  preferences: { activeTab: 'report', detailMode: 'compact', categoryFilter: '全部' },
+  preferences: { activeTab: 'report', detailMode: 'compact', detailIssueFilter: 'all', categoryFilter: '全部' },
 };
 
 describe('report helpers', () => {

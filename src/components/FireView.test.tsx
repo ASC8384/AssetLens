@@ -14,7 +14,7 @@ describe('FireView', () => {
     expect(screen.getByText('FIRE 航线')).toBeTruthy();
     expect(screen.getAllByText('目标资产').length).toBeGreaterThan(0);
     expect(screen.getByText('当前进度')).toBeTruthy();
-    expect(screen.getByText('距离目标')).toBeTruthy();
+    expect(screen.getAllByText('距离目标').length).toBeGreaterThan(0);
     expect(screen.getByText('FIRE 敏感性矩阵')).toBeTruthy();
     expect(screen.getAllByText('当前配置').length).toBeGreaterThan(0);
     expect(screen.queryByText('提取率场景')).toBeNull();
@@ -29,6 +29,9 @@ describe('FireView', () => {
     expect(screen.queryByText('目标差距速览')).toBeNull();
     expect(screen.queryByText('估算边界')).toBeNull();
     expect(screen.queryByText('配置影响')).toBeNull();
+    expect(screen.getByText('FIRE 结论摘要')).toBeTruthy();
+    expect(screen.getByText('变量影响排行')).toBeTruthy();
+    expect(screen.getByText('预计目标年月')).toBeTruthy();
     expect(screen.getByText('FIRE 核心假设')).toBeTruthy();
     expect(screen.getByText('目标拆解')).toBeTruthy();
     expect(screen.getByText('矩阵阅读方式')).toBeTruthy();

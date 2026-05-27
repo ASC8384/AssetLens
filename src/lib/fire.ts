@@ -17,6 +17,13 @@ export type FireSensitivityRate = { label: string; withdrawalRate: number };
 export type FireSensitivityCell = { withdrawalRate: number; target: number; gap: number; progress: number; isCurrent: boolean };
 export type FireSensitivityRow = { label: string; expenseMultiplier: number; monthlyExpense: number; cells: FireSensitivityCell[] };
 export type FireSensitivityMatrix = { rates: FireSensitivityRate[]; rows: FireSensitivityRow[] };
+export type FireDecisionSummary = {
+  fireGap: number;
+  targetYearMonth: string | null;
+  emergencyStatus: '已达标' | '需补齐';
+  variableImpacts: Array<{ label: string; amount: number }>;
+  nextActions: string[];
+};
 
 export type FireAnalysis = {
   currentNetWorth: number;
@@ -38,6 +45,7 @@ export type FireAnalysis = {
   speedEstimates: FireSpeedEstimate[];
   scenarios: Array<{ label: string; withdrawalRate: number; target: number; gap: number }>;
   sensitivityMatrix: FireSensitivityMatrix;
+  decisionSummary: FireDecisionSummary;
 };
 
 export function createDefaultFireConfig(): FireConfig {
@@ -77,6 +85,42 @@ export function fireSensitivityMatrix(config: FireConfig, currentNetWorth: numbe
   return { rates: sortedRates, rows };
 }
 
+export function fireDecisionSummary(latest: AssetSnapshot | undefined, config: FireConfig, today = new Date()): FireDecisionSummary {
+  const currentNetWorth = latest?.computedTotalCny ?? 0;
+  const annualExpense = config.monthlyExpense * 12;
+  const fireTarget = config.withdrawalRate > 0 ? annualExpense / config.withdrawalRate : 0;
+  const fireGap = Math.max(0, fireTarget - currentNetWorth);
+  const totals = latest ? categoryTotals(latest, []) : null;
+  const emergencyAssets = totals ? totals['现金'] + totals['银行卡'] : 0;
+  const emergencyReserveTarget = config.monthlyExpense * config.emergencyReserveMonthsTarget;
+  const matrix = fireSensitivityMatrix(config, currentNetWorth);
+  const currentTarget = matrix.rows[1].cells.find((cell) => cell.isCurrent)?.target ?? fireTarget;
+  const lowerExpenseTarget = matrix.rows[0].cells.find((cell) => cell.isCurrent)?.target ?? currentTarget;
+  const higherExpenseTarget = matrix.rows[2].cells.find((cell) => cell.isCurrent)?.target ?? currentTarget;
+  const lowerRateTarget = annualExpense / 0.03;
+  const higherRateTarget = annualExpense / 0.04;
+  const withReturnMonths = monthsWithReturnOnly(currentNetWorth, fireTarget, config.expectedAnnualReturn);
+  return {
+    fireGap,
+    targetYearMonth: targetYearMonth(today, withReturnMonths),
+    emergencyStatus: emergencyAssets >= emergencyReserveTarget ? '已达标' : '需补齐',
+    variableImpacts: [
+      { label: '月支出 +20%', amount: higherExpenseTarget - currentTarget },
+      { label: '月支出 -20%', amount: lowerExpenseTarget - currentTarget },
+      { label: '提取率降到 3.0%', amount: lowerRateTarget - currentTarget },
+      { label: '提取率升到 4.0%', amount: higherRateTarget - currentTarget },
+    ],
+    nextActions: fireGap <= 0 ? ['当前资产已达到 FIRE 目标。'] : emergencyAssets < emergencyReserveTarget ? ['先补齐应急备用金，再看长期 FIRE 进度。'] : ['优先观察月支出和安全提取率假设对目标的影响。'],
+  };
+}
+
+function targetYearMonth(today: Date, months: number | null): string | null {
+  if (months === null) return null;
+  const target = new Date(today);
+  target.setMonth(target.getMonth() + months);
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): FireAnalysis {
   const latest = snapshots[snapshots.length - 1];
   const currentNetWorth = latest?.computedTotalCny ?? 0;
@@ -111,6 +155,7 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
       return { label: `${(rate * 100).toFixed(1)}%`, withdrawalRate: rate, target, gap: Math.max(0, target - currentNetWorth) };
     }),
     sensitivityMatrix: fireSensitivityMatrix(config, currentNetWorth),
+    decisionSummary: fireDecisionSummary(latest, config),
   };
 }
 

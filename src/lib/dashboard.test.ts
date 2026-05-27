@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountRankingRows, analyzeDataHealth, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, riskTrendData, selectedSnapshotContext } from './dashboard';
+import { accountInsightSummary, accountRankingRows, analyzeDataHealth, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, riskTrendData, selectedSnapshotContext } from './dashboard';
 import { recalculateSnapshot } from './calculations';
 import type { AppData, AssetSnapshot } from './types';
 
@@ -49,7 +49,7 @@ function appData(snapshots: AssetSnapshot[]): AppData {
     defaultExchangeRates: { CNY: 1 },
     strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
     fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
-    preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
+    preferences: { activeTab: 'dashboard', detailMode: 'compact', detailIssueFilter: 'all', categoryFilter: '全部' },
   };
 }
 
@@ -152,6 +152,33 @@ describe('selectedSnapshotContext', () => {
   });
 });
 
+describe('accountInsightSummary', () => {
+  it('summarizes account increases, decreases, concentration and account churn', () => {
+    const previous = snapshot('2026-01-01', 100, 40);
+    const selected = snapshot('2026-02-01', 180, 30);
+    selected.entries.push({
+      accountId: 'new-bank',
+      accountName: '新增银行卡',
+      category: '银行卡',
+      originalAmount: 20,
+      currency: 'CNY',
+      exchangeRate: 1,
+      amountCny: 20,
+      excelRatio: null,
+      computedRatio: null,
+      ratioDiff: null,
+      includedInTotal: true,
+    });
+    const summary = accountInsightSummary(previous, selected);
+
+    expect(summary.topIncreases[0]).toEqual({ accountName: '基金账户', change: 80 });
+    expect(summary.topDecreases[0]).toEqual({ accountName: '现金账户', change: -10 });
+    expect(summary.newAccounts).toEqual(['新增银行卡']);
+    expect(summary.removedAccounts).toEqual([]);
+    expect(summary.concentrationRatio).toBeCloseTo(1);
+  });
+});
+
 describe('dashboardSummary', () => {
   it('returns latest category leader and risk asset ratio', () => {
     const data: AppData = {
@@ -161,7 +188,7 @@ describe('dashboardSummary', () => {
       defaultExchangeRates: { CNY: 1 },
       strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
       fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
-      preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
+      preferences: { activeTab: 'dashboard', detailMode: 'compact', detailIssueFilter: 'all', categoryFilter: '全部' },
     };
 
     expect(dashboardSummary(data)).toMatchObject({
@@ -190,7 +217,7 @@ describe('dashboard chart helpers', () => {
       defaultExchangeRates: { CNY: 1 },
       strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
       fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
-      preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
+      preferences: { activeTab: 'dashboard', detailMode: 'compact', detailIssueFilter: 'all', categoryFilter: '全部' },
     };
 
     expect(riskTrendData(data)).toEqual([
@@ -219,7 +246,7 @@ describe('categoryTrendData', () => {
       defaultExchangeRates: { CNY: 1 },
       strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
       fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
-      preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
+      preferences: { activeTab: 'dashboard', detailMode: 'compact', detailIssueFilter: 'all', categoryFilter: '全部' },
     };
 
     expect(categoryTrendData(data)).toEqual([
@@ -238,7 +265,7 @@ describe('dailyNetChangeRows', () => {
       defaultExchangeRates: { CNY: 1 },
       strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
       fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
-      preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
+      preferences: { activeTab: 'dashboard', detailMode: 'compact', detailIssueFilter: 'all', categoryFilter: '全部' },
     };
 
     expect(dailyNetChangeRows(data)).toEqual([
@@ -255,7 +282,7 @@ describe('dailyNetChangeRows', () => {
       defaultExchangeRates: { CNY: 1 },
       strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
       fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
-      preferences: { activeTab: 'dashboard', detailMode: 'compact', categoryFilter: '全部' },
+      preferences: { activeTab: 'dashboard', detailMode: 'compact', detailIssueFilter: 'all', categoryFilter: '全部' },
     };
 
     expect(dailyNetChangeRows(data)).toEqual([

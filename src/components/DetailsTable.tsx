@@ -7,10 +7,10 @@ import type { AccountConfig, AppData, AssetCategory, AssetSnapshot } from '../li
 
 export function DetailsTable({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
   const mode = data.preferences.detailMode;
+  const issueFilter = data.preferences.detailIssueFilter;
   const categoryFilter = data.preferences.categoryFilter;
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<DetailSortMode>('date-desc');
-  const [issueFilter, setIssueFilter] = useState<DetailIssueFilter>('all');
   const visibleAccounts = useMemo(() => filterAccounts(data.accounts, categoryFilter, search), [data.accounts, categoryFilter, search]);
   const visibleSnapshots = useMemo(() => filterSnapshotsByIssue(sortSnapshotsForDetails(data.snapshots, sortMode), issueFilter), [data.snapshots, sortMode, issueFilter]);
 
@@ -121,7 +121,7 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
             <option value="total-asc">总资产从低到高</option>
             <option value="diff-desc">合计差异优先</option>
           </select>
-          <select value={issueFilter} onChange={(event) => setIssueFilter(event.target.value as DetailIssueFilter)}>
+          <select value={issueFilter} onChange={(event) => updatePreference({ detailIssueFilter: event.target.value as DetailIssueFilter })}>
             <option value="all">全部记录</option>
             <option value="issues-only">只看异常</option>
           </select>
@@ -129,6 +129,13 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
           <button onClick={exportCsv}>导出当前表格</button>
         </div>
       </div>
+
+      {issueFilter === 'issues-only' && (
+        <div className="quality-banner danger">
+          <strong>正在只看异常记录</strong>
+          <span>优先检查合计差异、缺失汇率或无法折算的账户金额。</span>
+        </div>
+      )}
 
       <div className="table-wrap detail-wrap">
         <table>

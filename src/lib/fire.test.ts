@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeFire, createDefaultFireConfig, fireSensitivityMatrix, fireSpeedEstimates } from './fire';
+import { analyzeFire, createDefaultFireConfig, fireDecisionSummary, fireSensitivityMatrix, fireSpeedEstimates } from './fire';
 import { recalculateSnapshot } from './calculations';
 import type { AssetSnapshot } from './types';
 
@@ -16,6 +16,24 @@ function snapshot(date: string, total: number): AssetSnapshot {
     ],
   });
 }
+
+describe('FIRE decision summary', () => {
+  it('summarizes FIRE gap, target date and variable impact', () => {
+    const config = createDefaultFireConfig();
+    const summary = fireDecisionSummary(snapshot('2026-05-01', 1000000), config, new Date('2026-05-27T00:00:00'));
+
+    expect(summary).toMatchObject({
+      fireGap: 120000 / 0.035 - 1000000,
+      targetYearMonth: expect.stringMatching(/^\d{4}-\d{2}$/),
+      emergencyStatus: '已达标',
+    });
+    expect(summary.variableImpacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: '月支出 +20%' }),
+      expect.objectContaining({ label: '提取率降到 3.0%' }),
+    ]));
+    expect(summary.nextActions.length).toBeGreaterThan(0);
+  });
+});
 
 describe('FIRE sensitivity matrix', () => {
   it('builds a FIRE sensitivity matrix from expense multipliers and withdrawal rates', () => {

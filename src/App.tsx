@@ -44,7 +44,7 @@ export default function App() {
 
   function handleImportComplete(completion: ImportCompletion) {
     if (completion.dangerCount > 0) {
-      updateData({ ...completion.data, preferences: { ...completion.data.preferences, activeTab: 'details', detailMode: 'analysis' } }, `已导入 ${completion.snapshotCount} 期、${completion.accountCount} 个账户；发现 ${completion.dangerCount} 个严重异常，请在明细表检查。`);
+      updateData({ ...completion.data, preferences: { ...completion.data.preferences, activeTab: 'details', detailMode: 'analysis', detailIssueFilter: 'issues-only' } }, `已导入 ${completion.snapshotCount} 期、${completion.accountCount} 个账户；发现 ${completion.dangerCount} 个严重异常，请在明细表检查。`);
       return;
     }
     if (completion.isFirstImport) {

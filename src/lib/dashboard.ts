@@ -119,6 +119,35 @@ export function selectedSnapshotContext(snapshots: AssetSnapshot[], selectedSnap
   };
 }
 
+export type AccountInsightSummary = {
+  topIncreases: Array<{ accountName: string; change: number }>;
+  topDecreases: Array<{ accountName: string; change: number }>;
+  newAccounts: string[];
+  removedAccounts: string[];
+  concentrationRatio: number | null;
+};
+
+export function accountInsightSummary(previous: AssetSnapshot | undefined, selected: AssetSnapshot): AccountInsightSummary {
+  const previousEntries = new Map(previous?.entries.map((entry) => [entry.accountId, entry]) ?? []);
+  const selectedEntries = new Map(selected.entries.map((entry) => [entry.accountId, entry]));
+  const currentTotal = selected.entries.filter((entry) => entry.includedInTotal).reduce((sum, entry) => sum + (entry.amountCny ?? 0), 0);
+  const changes = selected.entries
+    .filter((entry) => entry.includedInTotal)
+    .map((entry) => ({ accountName: entry.accountName, change: (entry.amountCny ?? 0) - (previousEntries.get(entry.accountId)?.amountCny ?? 0) }));
+  const selectedAmounts = selected.entries
+    .filter((entry) => entry.includedInTotal && entry.amountCny !== null)
+    .map((entry) => entry.amountCny ?? 0)
+    .sort((a, b) => b - a);
+  const topThree = selectedAmounts.slice(0, 3).reduce((sum, value) => sum + value, 0);
+  return {
+    topIncreases: changes.filter((row) => row.change > 0).sort((a, b) => b.change - a.change).slice(0, 5),
+    topDecreases: changes.filter((row) => row.change < 0).sort((a, b) => a.change - b.change).slice(0, 5),
+    newAccounts: selected.entries.filter((entry) => !previousEntries.has(entry.accountId)).map((entry) => entry.accountName),
+    removedAccounts: [...previousEntries.values()].filter((entry) => !selectedEntries.has(entry.accountId)).map((entry) => entry.accountName),
+    concentrationRatio: currentTotal === 0 ? null : topThree / currentTotal,
+  };
+}
+
 export type DashboardSummary = {
   leaderCategory: AssetCategory | null;
   leaderAmount: number;
