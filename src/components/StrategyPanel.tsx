@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { categories } from '../lib/defaults';
+import { analyzeStrategy } from '../lib/strategy';
+import { formatPercent } from '../lib/format';
 import type { AppData, AssetCategory } from '../lib/types';
 
 export function StrategyPanel({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const latest = data.snapshots[data.snapshots.length - 1];
+  const analysis = latest ? analyzeStrategy(latest, data.strategy) : null;
 
   function updateStrategyNumber(key: 'cashReserveTarget' | 'riskAssetMinRatio' | 'riskAssetMaxRatio', value: string) {
     const number = Number(value);
@@ -31,6 +35,11 @@ export function StrategyPanel({ data, onChange }: { data: AppData; onChange: (da
           <p>可自定义目标参数，影响仪表盘策略雷达和复盘报告。</p>
         </div>
         <button onClick={() => setExpanded(!expanded)}>{expanded ? '收起策略' : '展开策略'}</button>
+      </div>
+      <div className="strategy-target-board">
+        <h3>资产结构目标看板</h3>
+        <div><span>风险资产目标区间</span><strong>{formatPercent(data.strategy.riskAssetMinRatio)} → {formatPercent(data.strategy.riskAssetMaxRatio)}</strong><small>当前 {formatPercent(analysis?.riskAssetRatio)}</small></div>
+        <div><span>应急备用金</span><strong>{analysis ? (analysis.cashReserveGap >= 0 ? '已达标' : '需补齐') : '暂无数据'}</strong><small>{analysis ? `差额 ${analysis.cashReserveGap >= 0 ? '+' : ''}${analysis.cashReserveGap}` : '导入快照后可分析'}</small></div>
       </div>
       {expanded && (
         <div className="strategy-config-grid">

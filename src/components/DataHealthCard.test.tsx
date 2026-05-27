@@ -21,6 +21,9 @@ describe('DataHealthCard', () => {
     expect(screen.getByText('数据正常')).toBeTruthy();
     expect(screen.getByText('快照期数')).toBeTruthy();
     expect(screen.getByText('账户数量')).toBeTruthy();
+    expect(screen.getByText('数据健康中心')).toBeTruthy();
+    expect(screen.getByText('备份提醒')).toBeTruthy();
+    expect(screen.getByText(/建议导出 JSON 备份/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '生成复盘' }));
 
     expect(onNavigate).toHaveBeenCalledWith('report');
