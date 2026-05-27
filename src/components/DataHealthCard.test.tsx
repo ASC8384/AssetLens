@@ -22,7 +22,12 @@ describe('DataHealthCard', () => {
     expect(screen.getByText('快照期数')).toBeTruthy();
     expect(screen.getByText('账户数量')).toBeTruthy();
     expect(screen.getByText('数据健康中心')).toBeTruthy();
+    expect(screen.getByText(/合计差异/)).toBeTruthy();
+    expect(screen.getByText(/汇率缺失/)).toBeTruthy();
+    expect(screen.getByText(/重复日期/)).toBeTruthy();
+    expect(screen.getByText(/空金额/)).toBeTruthy();
     expect(screen.getByText('备份提醒')).toBeTruthy();
+    expect(screen.getByText('上次备份时间')).toBeTruthy();
     expect(screen.getByText(/建议导出 JSON 备份/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '生成复盘' }));
 

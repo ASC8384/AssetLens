@@ -52,6 +52,22 @@ export function Dashboard({ data }: { data: AppData }) {
         </div>
       </div>
 
+      <div className="dashboard-action-card chart-card">
+        <div>
+          <span className="eyebrow">MONTHLY REVIEW</span>
+          <h3>本月资产复盘入口</h3>
+          <p>最近一期较上一期变化 {formatMoney(change.amount)}，风险资产占比 {formatPercent(summary.riskAssetRatio)}。</p>
+        </div>
+        <button className="primary">生成本月复盘</button>
+      </div>
+
+      <div className="snapshot-timeline chart-card">
+        <h3>快照时间轴</h3>
+        <div className="timeline-points">
+          {snapshots.map((snapshot) => <button key={snapshot.id} className={snapshot.id === selected.id ? 'active' : ''} onClick={() => setSelectedSnapshotId(snapshot.id)}>{snapshot.date}</button>)}
+        </div>
+      </div>
+
       <div className="dashboard-timebar">
         <label>查看时间节点
           <select value={selected?.id ?? ''} onChange={(event) => setSelectedSnapshotId(event.target.value)}>

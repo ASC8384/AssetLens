@@ -36,8 +36,8 @@ export function DataHealthCard({ data, onNavigate }: { data: AppData; onNavigate
         <span className={`data-health-chip ${analysis.hasMissingExchangeRates ? 'attention' : ''}`}>{analysis.hasMissingExchangeRates ? '汇率缺失待查' : '汇率检查正常'}</span>
       </div>
       <div className="data-health-center">
-        <div><strong>数据健康中心</strong><small>持续检查合计差异、汇率缺失和快照更新节奏。</small></div>
-        <div><strong>备份提醒</strong><small>{analysis.snapshotCount >= 3 ? '已有多期快照，建议导出 JSON 备份。' : '有真实数据后建议定期导出 JSON 备份。'}</small></div>
+        <div><strong>数据健康中心</strong><small>合计差异 · 汇率缺失 · 重复日期 · 空金额 · 快照更新节奏</small></div>
+        <div><strong>备份提醒</strong><small><span>上次备份时间</span> 暂未记录；{analysis.snapshotCount >= 3 ? '已有多期快照，建议导出 JSON 备份。' : '有真实数据后建议定期导出 JSON 备份。'}</small></div>
       </div>
     </section>
   );

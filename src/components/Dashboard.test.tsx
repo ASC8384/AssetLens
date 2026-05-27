@@ -40,6 +40,9 @@ describe('Dashboard', () => {
   it('renders account insight summary for the selected snapshot', () => {
     render(<Dashboard data={createSampleData()} />);
 
+    expect(screen.getByText('本月资产复盘入口')).toBeTruthy();
+    expect(screen.getByText('生成本月复盘')).toBeTruthy();
+    expect(screen.getByText('快照时间轴')).toBeTruthy();
     expect(screen.getByText('账户洞察')).toBeTruthy();
     expect(screen.getByText('增长账户 Top 5')).toBeTruthy();
     expect(screen.getByText('下降账户 Top 5')).toBeTruthy();
