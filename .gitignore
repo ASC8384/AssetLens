@@ -4,6 +4,7 @@
 node_modules/
 dist/
 .DS_Store
+.cursor/
 
 # 个人资产数据绝不入库：导入源文件、导出结果、备份和截图
 *.xlsx
