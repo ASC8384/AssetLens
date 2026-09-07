@@ -2,7 +2,8 @@ import type { AccountConfig, AppData, AssetCategory } from './types';
 import { createDefaultFireConfig } from './fire';
 import { createDefaultStrategyConfig } from './strategy';
 
-export const categories: AssetCategory[] = ['基金', '现金', '证券', '银行卡', '杂项'];
+export const categories: AssetCategory[] = ['基金', '现金', '证券', '银行卡', '杂项', '负债'];
+export const assetCategories: AssetCategory[] = categories.filter((category) => category !== '负债');
 
 export const categoryColors: Record<AssetCategory, string> = {
   基金: '#4f46e5',
@@ -10,6 +11,7 @@ export const categoryColors: Record<AssetCategory, string> = {
   证券: '#dc2626',
   银行卡: '#2563eb',
   杂项: '#9333ea',
+  负债: '#e11d48',
 };
 
 export const defaultExchangeRates: Record<string, number> = {
@@ -35,10 +37,17 @@ export const defaultAccountCategories: Record<string, AssetCategory> = {
   银行卡D: '银行卡',
   银行卡E: '银行卡',
   杂: '杂项',
+  信用卡A: '负债',
 };
 
+const liabilityNamePattern = /visa|mastercard|amex|jcb|信用卡|贷记卡|普卡|金卡|欠款|负债|花呗|白条|借呗|credit\s*card/i;
+
+export function looksLikeLiability(name: string): boolean {
+  return liabilityNamePattern.test(name.trim());
+}
+
 export function categoryForAccount(name: string): AssetCategory {
-  return defaultAccountCategories[name] ?? '杂项';
+  return defaultAccountCategories[name] ?? (looksLikeLiability(name) ? '负债' : '杂项');
 }
 
 export function createAccountConfig(name: string): AccountConfig {

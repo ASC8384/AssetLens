@@ -4,6 +4,10 @@ import { buildEntry, mergeAccounts, recalculateSnapshot, sortSnapshots } from '.
 import { parseNumber } from './format';
 import type { AccountConfig, AppData, AssetSnapshot, DuplicateDateMode, FieldMapping, ImportDraft, ParsedTable } from './types';
 
+const ignoredMetaHeaders = new Set(['时长', '变动', '日均', '结余', '支出']);
+const incomeHeaders = new Set(['收入', '外界收入', '非理财收入', '主动收入', 'income']);
+const noteHeaders = new Set(['备注', '说明', 'note', 'notes']);
+
 export function parsePastedTable(text: string): ParsedTable {
   const rawRows = text
     .trim()
@@ -64,18 +68,34 @@ export function inferFieldMappings(parsed: ParsedTable): FieldMapping[] {
         sampleValues,
       };
     }
+    if (incomeHeaders.has(normalized.toLowerCase()) || incomeHeaders.has(normalized)) {
+      return { columnIndex, header, role: 'income', import: true, sampleValues };
+    }
+    if (noteHeaders.has(normalized.toLowerCase()) || noteHeaders.has(normalized)) {
+      return { columnIndex, header, role: 'note', import: true, sampleValues };
+    }
+    if (ignoredMetaHeaders.has(normalized)) {
+      return { columnIndex, header, role: 'ignore', import: false, sampleValues };
+    }
     return {
       columnIndex,
       header,
       role: 'account',
       accountName: normalized,
       category: categoryForAccount(normalized),
-      currency: 'CNY',
+      currency: inferCurrency(sampleValues),
       includedInTotal: true,
       import: true,
       sampleValues,
     };
   });
+}
+
+function inferCurrency(sampleValues: string[]): string {
+  const joined = sampleValues.join(' ');
+  if (/HK\$|HKD/i.test(joined)) return 'HKD';
+  if (/\$|USD|美元/.test(joined) && !/[¥￥]/.test(joined)) return 'USD';
+  return 'CNY';
 }
 
 function findPreviousAccountColumn(headers: string[], columnIndex: number): number | null {
@@ -90,6 +110,8 @@ function findPreviousAccountColumn(headers: string[], columnIndex: number): numb
 export function buildSnapshotsFromDraft(draft: ImportDraft, existingAccounts: AccountConfig[]): { snapshots: AssetSnapshot[]; accounts: AccountConfig[] } {
   const dateMapping = draft.mappings.find((mapping) => mapping.role === 'date' && mapping.import);
   const totalMapping = draft.mappings.find((mapping) => mapping.role === 'total' && mapping.import);
+  const incomeMapping = draft.mappings.find((mapping) => mapping.role === 'income' && mapping.import);
+  const noteMapping = draft.mappings.find((mapping) => mapping.role === 'note' && mapping.import);
   const accountMappings = draft.mappings.filter((mapping) => mapping.role === 'account' && mapping.import);
   const ratioByAccountColumn = new Map(
     draft.mappings
@@ -132,6 +154,8 @@ export function buildSnapshotsFromDraft(draft: ImportDraft, existingAccounts: Ac
       entries,
       excelTotal: totalMapping ? parseNumber(row[totalMapping.columnIndex]) ?? undefined : undefined,
       computedTotalCny: 0,
+      externalIncome: incomeMapping ? parseNumber(row[incomeMapping.columnIndex]) : null,
+      note: noteMapping ? String(row[noteMapping.columnIndex] ?? '').trim() || undefined : undefined,
     });
   });
 
@@ -177,7 +201,12 @@ function manualSnapshotAccounts(data: AppData, previous: AssetSnapshot | undefin
   })) ?? [];
 }
 
-export function buildManualSnapshot(data: AppData, date: string, amountByAccountId: Record<string, string | undefined>): AssetSnapshot {
+export type ManualSnapshotExtras = {
+  externalIncome?: string;
+  note?: string;
+};
+
+export function buildManualSnapshot(data: AppData, date: string, amountByAccountId: Record<string, string | undefined>, extras: ManualSnapshotExtras = {}): AssetSnapshot {
   const previous = data.snapshots[data.snapshots.length - 1];
   const accounts = manualSnapshotAccounts(data, previous);
   const exchangeRates = { ...data.defaultExchangeRates, ...(previous?.exchangeRates ?? {}) };
@@ -187,6 +216,8 @@ export function buildManualSnapshot(data: AppData, date: string, amountByAccount
     exchangeRates: { ...exchangeRates },
     entries: accounts.map((account) => buildEntry(account.name, parseNumber(amountByAccountId[account.id]), null, account)),
     computedTotalCny: 0,
+    externalIncome: extras.externalIncome === undefined ? null : parseNumber(extras.externalIncome),
+    note: extras.note?.trim() || undefined,
   });
 }
 

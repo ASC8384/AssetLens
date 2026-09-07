@@ -1,5 +1,6 @@
-import { categoryTotals } from './calculations';
+import { categoryTotals, isLiabilityCategory, snapshotBookTotal } from './calculations';
 import { categories } from './defaults';
+import { resolveExternalIncome } from './income';
 import type { AppData, AssetCategory, AssetSnapshot } from './types';
 
 export type TotalQuality = {
@@ -13,8 +14,9 @@ export function totalQuality(snapshot: AssetSnapshot | undefined): TotalQuality 
   if (!snapshot || snapshot.excelTotal === undefined) {
     return { status: 'missing', diff: null, diffRatio: null, message: '没有 Excel 原合计可对照。' };
   }
-  const diff = snapshot.computedTotalCny - snapshot.excelTotal;
-  const diffRatio = snapshot.computedTotalCny === 0 ? null : diff / snapshot.computedTotalCny;
+  const bookTotal = snapshotBookTotal(snapshot);
+  const diff = bookTotal - snapshot.excelTotal;
+  const diffRatio = bookTotal === 0 ? null : diff / bookTotal;
   const absRatio = Math.abs(diffRatio ?? 0);
   if (absRatio >= 0.05) return { status: 'danger', diff, diffRatio, message: 'Excel 原合计和网页重算合计差异很大，请检查合计列是否识别正确。' };
   if (absRatio >= 0.01) return { status: 'warning', diff, diffRatio, message: 'Excel 原合计和网页重算合计存在差异。' };
@@ -130,12 +132,14 @@ export type AccountInsightSummary = {
 export function accountInsightSummary(previous: AssetSnapshot | undefined, selected: AssetSnapshot): AccountInsightSummary {
   const previousEntries = new Map(previous?.entries.map((entry) => [entry.accountId, entry]) ?? []);
   const selectedEntries = new Map(selected.entries.map((entry) => [entry.accountId, entry]));
-  const currentTotal = selected.entries.filter((entry) => entry.includedInTotal).reduce((sum, entry) => sum + (entry.amountCny ?? 0), 0);
+  const currentTotal = selected.entries
+    .filter((entry) => entry.includedInTotal && !isLiabilityCategory(entry.category))
+    .reduce((sum, entry) => sum + (entry.amountCny ?? 0), 0);
   const changes = selected.entries
     .filter((entry) => entry.includedInTotal)
     .map((entry) => ({ accountName: entry.accountName, change: (entry.amountCny ?? 0) - (previousEntries.get(entry.accountId)?.amountCny ?? 0) }));
   const selectedAmounts = selected.entries
-    .filter((entry) => entry.includedInTotal && entry.amountCny !== null)
+    .filter((entry) => entry.includedInTotal && entry.amountCny !== null && !isLiabilityCategory(entry.category))
     .map((entry) => entry.amountCny ?? 0)
     .sort((a, b) => b - a);
   const topThree = selectedAmounts.slice(0, 3).reduce((sum, value) => sum + value, 0);
@@ -152,20 +156,50 @@ export type DashboardSummary = {
   leaderCategory: AssetCategory | null;
   leaderAmount: number;
   riskAssetRatio: number | null;
+  grossAssets: number;
+  liabilityAmount: number;
+  netWorth: number;
+  externalIncome: number | null;
 };
 
 export function dashboardSummary(data: AppData): DashboardSummary {
   const latest = data.snapshots[data.snapshots.length - 1];
-  if (!latest) return { leaderCategory: null, leaderAmount: 0, riskAssetRatio: null };
+  if (!latest) return { leaderCategory: null, leaderAmount: 0, riskAssetRatio: null, grossAssets: 0, liabilityAmount: 0, netWorth: 0, externalIncome: null };
   const totals = categoryTotals(latest, data.accounts);
   const leader = categories
+    .filter((category) => !isLiabilityCategory(category))
     .map((category) => ({ category, amount: totals[category] }))
     .sort((a, b) => b.amount - a.amount)[0];
   const riskAmount = totals['基金'] + totals['证券'];
+  const grossAssets = latest.computedGrossAssetsCny;
   return {
     leaderCategory: leader?.category ?? null,
     leaderAmount: leader?.amount ?? 0,
-    riskAssetRatio: latest.computedTotalCny === 0 ? null : riskAmount / latest.computedTotalCny,
+    riskAssetRatio: grossAssets === 0 ? null : riskAmount / grossAssets,
+    grossAssets,
+    liabilityAmount: latest.computedLiabilityCny,
+    netWorth: latest.computedTotalCny,
+    externalIncome: resolveExternalIncome(data.snapshots, latest).amount,
+  };
+}
+
+export type PeriodCashflow = {
+  netChange: number | null;
+  externalIncome: number | null;
+  externalIncomeSourceDate: string | null;
+  externalIncomeInherited: boolean;
+  afterIncomeChange: number | null;
+};
+
+export function periodCashflow(previous: AssetSnapshot | undefined, selected: AssetSnapshot, snapshots: AssetSnapshot[] = []): PeriodCashflow {
+  const netChange = previous ? selected.computedTotalCny - previous.computedTotalCny : null;
+  const resolved = resolveExternalIncome(snapshots.length > 0 ? snapshots : [selected], selected);
+  return {
+    netChange,
+    externalIncome: resolved.amount,
+    externalIncomeSourceDate: resolved.sourceDate,
+    externalIncomeInherited: resolved.inherited,
+    afterIncomeChange: netChange === null || resolved.amount === null ? null : netChange - resolved.amount,
   };
 }
 

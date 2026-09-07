@@ -197,11 +197,14 @@ code { color: var(--blue); }
 .dashboard-timebar { display: flex; justify-content: flex-end; gap: 10px; align-items: center; margin-top: 14px; }
 .dashboard-timebar label { display: flex; gap: 10px; align-items: center; color: var(--muted); font-weight: 800; }
 .dashboard-timebar select { min-width: 180px; }
-.insight-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+.insight-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 16px; }
 .insight-strip div { padding: 16px; border-radius: 20px; background: rgba(255,255,255,.56); border: 1px solid var(--line); box-shadow: 0 14px 32px rgba(16,35,63,.07); }
 .insight-strip span { display: block; color: var(--muted); font-size: 13px; font-weight: 800; }
 .insight-strip strong { display: block; margin-top: 6px; font-size: 24px; color: var(--navy); }
 .insight-strip small { display: block; margin-top: 4px; color: #8a6f54; }
+.cashflow-strip { grid-template-columns: repeat(3, 1fr); }
+.liability-col { background: rgba(225, 29, 72, 0.06); }
+.income-carry-hint { display: block; margin-top: 4px; color: #8a6f54; font-size: 12px; }
 .strategy-radar { display: grid; grid-template-columns: minmax(260px, .8fr) 1fr; gap: 18px; margin-top: 16px; padding: 18px; }
 .strategy-radar h3 { margin: 0 0 6px; font-family: 'DM Serif Display', Georgia, serif; font-size: 24px; font-weight: 400; color: var(--navy); }
 .strategy-radar p { margin: 0; color: var(--muted); }
@@ -288,7 +291,7 @@ th.sticky-col { background: #f4efe6; z-index: 3; }
 .account-insight-grid small { display: block; color: var(--muted); margin-top: 5px; }
 @media (max-width: 1200px) {
   .main-charts, .secondary-charts, .tertiary-charts, .import-grid, .config-grid, .control-strip, .three-column-controls { grid-template-columns: 1fr; }
-  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .metric-grid, .insight-strip, .cashflow-strip, .report-summary-grid { grid-template-columns: repeat(2, 1fr); }
   .account-insight-grid { grid-template-columns: 1fr; }
 }
 

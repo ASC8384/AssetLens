@@ -27,9 +27,11 @@ export function parseNumber(value: unknown): number | null {
   if (!raw || raw === '-' || raw === '—') return null;
   const isPercent = raw.endsWith('%');
   const normalized = raw
-    .replace(/[￥¥,，\s]/g, '')
+    .replace(/US\$|HK\$/gi, '')
+    .replace(/[￥¥$,，\s]/g, '')
+    .replace(/USD|HKD|CNY/gi, '')
     .replace(/%$/, '')
-    .replace(/^\((.*)\)$/, '-$1');
+    .replace(/^[（(](.*)[）)]$/, '-$1');
   if (!normalized) return null;
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) return null;

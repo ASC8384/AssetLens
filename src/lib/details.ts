@@ -1,3 +1,4 @@
+import { snapshotBookTotal } from './calculations';
 import type { AccountConfig, AssetCategory, AssetSnapshot } from './types';
 
 export type DetailSortMode = 'date-asc' | 'date-desc' | 'total-asc' | 'total-desc' | 'diff-desc';
@@ -29,5 +30,5 @@ export function filterSnapshotsByIssue(snapshots: AssetSnapshot[], mode: DetailI
 }
 
 function totalDiffAbs(snapshot: AssetSnapshot): number {
-  return snapshot.excelTotal === undefined ? 0 : Math.abs(snapshot.computedTotalCny - snapshot.excelTotal);
+  return snapshot.excelTotal === undefined ? 0 : Math.abs(snapshotBookTotal(snapshot) - snapshot.excelTotal);
 }

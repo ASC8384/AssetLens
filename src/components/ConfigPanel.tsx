@@ -36,7 +36,7 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
           <div className="section-header">
             <div>
               <h2>账户配置</h2>
-              <p>修改分类、默认币种、是否计入总资产或隐藏账户。</p>
+              <p>修改分类、默认币种、是否计入统计或隐藏账户。负债请填欠款正数，会从净资产中扣除。</p>
             </div>
           </div>
           <div className="table-wrap small-table">

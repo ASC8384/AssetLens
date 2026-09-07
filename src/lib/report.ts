@@ -27,6 +27,11 @@ export type StructuredReportSummary = {
   topDecreases: Array<{ accountName: string; change: number }>;
   categoryChanges: Array<{ category: AssetCategory; start: number; end: number; change: number }>;
   riskAssetRatioChange: { start: number | null; end: number | null; change: number | null };
+  startLiability: number | null;
+  endLiability: number | null;
+  liabilityChange: number | null;
+  externalIncomeTotal: number | null;
+  afterIncomeChange: number | null;
   dataQualityMessages: string[];
 };
 
@@ -73,6 +78,11 @@ export function buildStructuredReportSummary(data: AppData, startDate: string, e
       topDecreases: [],
       categoryChanges: [],
       riskAssetRatioChange: { start: null, end: null, change: null },
+      startLiability: null,
+      endLiability: null,
+      liabilityChange: null,
+      externalIncomeTotal: null,
+      afterIncomeChange: null,
       dataQualityMessages: ['当前时间范围内没有资产记录。'],
     };
   }
@@ -87,9 +97,11 @@ export function buildStructuredReportSummary(data: AppData, startDate: string, e
   const contributionRows = accountContributionRows(first, last);
   const topIncreases = contributionRows.filter((row) => row.change > 0).slice(0, 3);
   const topDecreases = [...contributionRows].reverse().filter((row) => row.change < 0).slice(0, 3);
-  const startRiskRatio = startTotal === 0 ? null : (startTotals['基金'] + startTotals['证券']) / startTotal;
-  const endRiskRatio = endTotal === 0 ? null : (endTotals['基金'] + endTotals['证券']) / endTotal;
+  const startRiskRatio = first.computedGrossAssetsCny === 0 ? null : (startTotals['基金'] + startTotals['证券']) / first.computedGrossAssetsCny;
+  const endRiskRatio = last.computedGrossAssetsCny === 0 ? null : (endTotals['基金'] + endTotals['证券']) / last.computedGrossAssetsCny;
   const qualityMessages = dataQualityMessages(snapshots);
+  const incomeValues = snapshots.map((snapshot) => snapshot.externalIncome).filter((value): value is number => value !== null && value !== undefined);
+  const externalIncomeTotal = incomeValues.length > 0 ? incomeValues.reduce((sum, value) => sum + value, 0) : null;
 
   return {
     status: 'ready',
@@ -109,6 +121,11 @@ export function buildStructuredReportSummary(data: AppData, startDate: string, e
       end: endRiskRatio,
       change: startRiskRatio === null || endRiskRatio === null ? null : endRiskRatio - startRiskRatio,
     },
+    startLiability: first.computedLiabilityCny,
+    endLiability: last.computedLiabilityCny,
+    liabilityChange: last.computedLiabilityCny - first.computedLiabilityCny,
+    externalIncomeTotal,
+    afterIncomeChange: externalIncomeTotal === null ? null : totalChange - externalIncomeTotal,
     dataQualityMessages: qualityMessages,
   };
 }
@@ -141,10 +158,14 @@ export function generateMarkdownReport(data: AppData, startDate: string, endDate
     `# 资产复盘报告（${first.date} 至 ${last.date}）`,
     '',
     `- 对比方式：${mode === 'endpoint' ? '期初 vs 期末' : '逐期变化'}`,
-    `- 期初总资产：${formatMoney(first.computedTotalCny)}`,
-    `- 期末总资产：${formatMoney(last.computedTotalCny)}`,
-    `- 总资产变化：${formatMoney(change)}`,
-    `- 总资产增长率：${formatPercent(growth)}`,
+    `- 期初净资产：${formatMoney(first.computedTotalCny)}`,
+    `- 期末净资产：${formatMoney(last.computedTotalCny)}`,
+    `- 净资产变化：${formatMoney(change)}`,
+    `- 净资产增长率：${formatPercent(growth)}`,
+    `- 期初负债：${formatMoney(first.computedLiabilityCny)}`,
+    `- 期末负债：${formatMoney(last.computedLiabilityCny)}`,
+    `- 区间外界收入合计：${formatMoney(sumExternalIncome(snapshots))}`,
+    `- 扣除外界收入后变化：${formatMoney(afterIncomeChange(change, snapshots))}`,
     `- 最大增长账户：${largestIncrease ? `${largestIncrease.accountName}（${formatMoney(largestIncrease.change)}）` : '—'}`,
     `- 最大减少账户：${largestDecrease ? `${largestDecrease.accountName}（${formatMoney(largestDecrease.change)}）` : '—'}`,
     '',
@@ -200,3 +221,13 @@ function periodicSummary(snapshots: AssetSnapshot[], mode: ReportMode): string {
 }
 
 export { accountChanges };
+
+function sumExternalIncome(snapshots: AssetSnapshot[]): number | null {
+  const values = snapshots.map((snapshot) => snapshot.externalIncome).filter((value): value is number => value !== null && value !== undefined);
+  return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) : null;
+}
+
+function afterIncomeChange(netChange: number, snapshots: AssetSnapshot[]): number | null {
+  const income = sumExternalIncome(snapshots);
+  return income === null ? null : netChange - income;
+}

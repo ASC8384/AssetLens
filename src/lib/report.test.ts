@@ -65,6 +65,8 @@ describe('report helpers', () => {
       { category: '基金', start: 100, end: 160, change: 60 },
       { category: '现金', start: 50, end: 90, change: 40 },
     ]));
+    expect(summary.externalIncomeTotal).toBeNull();
+    expect(summary.endLiability).toBe(0);
     expect(summary.riskAssetRatioChange).toEqual({
       start: 100 / 150,
       end: 160 / 250,

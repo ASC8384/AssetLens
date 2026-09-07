@@ -226,3 +226,21 @@ describe('buildManualSnapshot', () => {
     ]));
   });
 });
+
+describe('spreadsheet column inference', () => {
+  it('does not treat a payroll-like account name as the income column', () => {
+    const draft = importers.createImportDraft({
+      headers: ['时间', '基金账户A', '占比', '工资卡A', '占比', '美元账户A', '占比', '示例Visa', '占比', '示例普卡', '占比', '合计', '备注', '时长', '变动', '日均', '收入', '结余'],
+      rows: [['2026/9/4', '10000', '80%', '200', '1.6%', '$1,000.00', '8%', '500', '4%', '800', '6.4%', '12500', '示例备注', '15', '-200', '-13', '0', '200']],
+    });
+    const byHeader = Object.fromEntries(draft.mappings.map((mapping) => [mapping.header, mapping]));
+
+    expect(byHeader['工资卡A']).toMatchObject({ role: 'account', category: '杂项' });
+    expect(byHeader['美元账户A']).toMatchObject({ role: 'account', currency: 'USD' });
+    expect(byHeader['示例Visa']).toMatchObject({ role: 'account', category: '负债' });
+    expect(byHeader['示例普卡']).toMatchObject({ role: 'account', category: '负债' });
+    expect(byHeader['收入']).toMatchObject({ role: 'income' });
+    expect(byHeader['备注']).toMatchObject({ role: 'note' });
+    expect(byHeader['结余']).toMatchObject({ role: 'ignore' });
+  });
+});

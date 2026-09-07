@@ -1,4 +1,5 @@
 import { categoryTotals } from './calculations';
+import { externalIncomeDateLabel, resolveExternalIncome } from './income';
 import type { AssetSnapshot, FireConfig } from './types';
 
 export type FireSpeedEstimate = {
@@ -27,6 +28,10 @@ export type FireDecisionSummary = {
 
 export type FireAnalysis = {
   currentNetWorth: number;
+  currentGrossAssets: number;
+  currentLiability: number;
+  latestExternalIncome: number | null;
+  latestExternalIncomeLabel: string | null;
   annualExpense: number;
   fireTarget: number;
   fireProgress: number;
@@ -132,8 +137,13 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
   const emergencyAssets = totals ? totals['现金'] + totals['银行卡'] : 0;
   const emergencyReserveTarget = config.monthlyExpense * config.emergencyReserveMonthsTarget;
   const emergencyReserveGap = Math.max(0, emergencyReserveTarget - emergencyAssets);
+  const latestIncome = resolveExternalIncome(snapshots, latest);
   return {
     currentNetWorth,
+    currentGrossAssets: latest?.computedGrossAssetsCny ?? 0,
+    currentLiability: latest?.computedLiabilityCny ?? 0,
+    latestExternalIncome: latestIncome.amount,
+    latestExternalIncomeLabel: externalIncomeDateLabel(latestIncome),
     annualExpense,
     fireTarget,
     fireProgress: fireTarget === 0 ? 0 : currentNetWorth / fireTarget,

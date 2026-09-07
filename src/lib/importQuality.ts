@@ -1,9 +1,11 @@
+import { snapshotBookTotal } from './calculations';
 import { totalQuality, type TotalQuality } from './dashboard';
 import type { AccountConfig, AssetSnapshot, FieldMapping, ImportDraft } from './types';
 
 export type ImportQualityRow = {
   date: string;
   computedTotalCny: number;
+  bookTotal: number;
   excelTotal: number | null;
   diff: number | null;
   diffRatio: number | null;
@@ -26,6 +28,7 @@ export function analyzeImportQuality(snapshots: AssetSnapshot[], accountCount: n
     return {
       date: snapshot.date,
       computedTotalCny: snapshot.computedTotalCny,
+      bookTotal: snapshotBookTotal(snapshot),
       excelTotal: snapshot.excelTotal ?? null,
       diff: quality.diff,
       diffRatio: quality.diffRatio,

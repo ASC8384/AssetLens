@@ -49,4 +49,15 @@ describe('DetailsTable', () => {
     expect(entry).toMatchObject({ currency: 'USD', exchangeRate: 7.5 });
     expect(entry?.amountCny).toBeCloseTo(59000 * 7.5);
   });
+
+  it('edits external income on a snapshot', () => {
+    const data = createSampleData();
+    const onChange = vi.fn();
+
+    render(<DetailsTable data={data} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('2026-05-01-外界收入'), { target: { value: '15000' } });
+
+    const updatedData = onChange.mock.calls[0][0] as AppData;
+    expect(updatedData.snapshots[updatedData.snapshots.length - 1].externalIncome).toBe(15000);
+  });
 });

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { isLiabilityCategory } from '../lib/calculations';
 import { buildManualSnapshot, buildSnapshotsFromDraft, createImportDraft, mergeImportedData, parseExcelFile, parsePastedTable } from '../lib/importers';
 import { analyzeImportQuality, ignoreTotalColumns } from '../lib/importQuality';
 import { formatMoney, formatPercent } from '../lib/format';
+import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
 import type { AccountConfig, AppData, DuplicateDateMode, FieldMapping, ImportDraft } from '../lib/types';
 import { categories } from '../lib/defaults';
 
@@ -11,6 +13,9 @@ type ManualDraft = {
   date: string;
   source: ManualSource;
   amountByAccountId: Record<string, string>;
+  externalIncome: string;
+  incomeSourceDate: string | null;
+  note: string;
 };
 
 export type ImportCompletion = {
@@ -50,10 +55,14 @@ function manualAmountDefaults(data: AppData, accounts: AccountConfig[], source: 
 }
 
 function createManualDraft(data: AppData, accounts: AccountConfig[], source: ManualSource = 'latest'): ManualDraft {
+  const carried = source === 'blank' ? { amount: null, sourceDate: null, inherited: false } : resolveExternalIncome(data.snapshots, data.snapshots[data.snapshots.length - 1]);
   return {
     date: todayString(),
     source,
     amountByAccountId: manualAmountDefaults(data, accounts, source),
+    externalIncome: carried.amount === null ? '' : String(carried.amount),
+    incomeSourceDate: carried.sourceDate,
+    note: '',
   };
 }
 
@@ -112,10 +121,11 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
 
   function updateManualSource(source: ManualSource) {
     if (!manualDraft) return;
+    const next = createManualDraft(data, manualAccountList, source);
     setManualDraft({
-      ...manualDraft,
-      source,
-      amountByAccountId: manualAmountDefaults(data, manualAccountList, source),
+      ...next,
+      date: manualDraft.date,
+      note: manualDraft.note,
     });
   }
 
@@ -142,7 +152,10 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
 
   function confirmManualInput() {
     if (!manualDraft?.date || manualAccountList.length === 0) return;
-    const snapshot = buildManualSnapshot(data, manualDraft.date, manualDraft.amountByAccountId);
+        const snapshot = buildManualSnapshot(data, manualDraft.date, manualDraft.amountByAccountId, {
+          externalIncome: manualDraft.externalIncome,
+          note: manualDraft.note,
+        });
     const nextData = mergeImportedData(data, [snapshot], manualAccountList, duplicateMode);
     if (onManualSnapshotCreated) {
       onManualSnapshotCreated(nextData);
@@ -169,7 +182,9 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
           <li>第一行必须是表头，第一列建议命名为 <code>时间</code>。</li>
           <li>每个账户只关注金额列；<code>占比</code> 列默认忽略，系统会按金额重新计算占比。</li>
           <li><code>合计</code> 列可选；如果它不是总资产，请在字段映射里改成“忽略”。</li>
-          <li>金额支持 <code>1,234.56</code>、<code>￥1,234.56</code>、空值和 <code>-</code>。</li>
+          <li>信用卡、花呗等欠款请归入 <code>负债</code>；金额填欠款正数，会从净资产中扣除。</li>
+          <li><code>收入</code> 列会识别为外界收入（工资等非理财流入），<code>备注</code> 会一并导入。</li>
+          <li><code>时长</code>、<code>变动</code>、<code>日均</code>、<code>结余</code> 等派生列默认忽略。</li>
         </ul>
         <pre>{`时间\t基金账户A\t占比\t现金账户A\t占比\t合计
 2026-05-01\t59000\t34.3%\t10000\t5.8%\t69000`}</pre>
@@ -214,8 +229,12 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
           ) : (
             <div className="manual-grid">
               <label>日期<input aria-label="日期" type="date" value={manualDraft.date} onChange={(event) => setManualDraft({ ...manualDraft, date: event.target.value })} /></label>
+              <label>外界收入{manualDraft.incomeSourceDate ? `（${externalIncomeDateLabel({ amount: null, sourceDate: manualDraft.incomeSourceDate, inherited: true })}）` : ''}
+                <input aria-label="外界收入" value={manualDraft.externalIncome} onChange={(event) => setManualDraft({ ...manualDraft, externalIncome: event.target.value, incomeSourceDate: null })} placeholder="工资等非理财流入" />
+              </label>
+              <label>备注<input aria-label="备注" value={manualDraft.note} onChange={(event) => setManualDraft({ ...manualDraft, note: event.target.value })} /></label>
               {manualAccountList.map((account) => (
-                <label key={account.id}>{account.name}<input aria-label={account.name} value={manualDraft.amountByAccountId[account.id] ?? ''} onChange={(event) => updateManualAmount(account.id, event.target.value)} /></label>
+                <label key={account.id}>{account.name}{isLiabilityCategory(account.category) ? '（欠款）' : ''}<input aria-label={account.name} value={manualDraft.amountByAccountId[account.id] ?? ''} onChange={(event) => updateManualAmount(account.id, event.target.value)} /></label>
               ))}
             </div>
           )}
@@ -263,7 +282,7 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
                   <th>账户名</th>
                   <th>分类</th>
                   <th>币种</th>
-                  <th>计入总资产</th>
+                  <th>计入统计</th>
                   <th>示例值</th>
                 </tr>
               </thead>
@@ -277,10 +296,12 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
                         <option value="date">时间</option>
                         <option value="account">账户金额</option>
                         <option value="total">合计</option>
+                        <option value="income">外界收入</option>
+                        <option value="note">备注</option>
                         <option value="ignore">忽略</option>
                       </select>
                     </td>
-                    <td><input value={mapping.accountName ?? ''} onChange={(event) => updateMapping(mapping.columnIndex, { accountName: event.target.value })} disabled={mapping.role === 'date' || mapping.role === 'total'} /></td>
+                    <td><input value={mapping.accountName ?? ''} onChange={(event) => updateMapping(mapping.columnIndex, { accountName: event.target.value })} disabled={mapping.role !== 'account'} /></td>
                     <td>
                       <select value={mapping.category ?? '杂项'} onChange={(event) => updateMapping(mapping.columnIndex, { category: event.target.value as FieldMapping['category'] })} disabled={mapping.role !== 'account'}>
                         {categories.map((category) => <option key={category} value={category}>{category}</option>)}
@@ -304,12 +325,13 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
               {importQuality.hasSuspiciousTotal && <p className="danger-text">检测到合计列疑似不是总资产，可点击“一键忽略合计列”。</p>}
               <div className="table-wrap small-table">
                 <table>
-                  <thead><tr><th>日期</th><th>网页重算总资产</th><th>Excel 合计</th><th>差异</th><th>差异率</th><th>状态</th></tr></thead>
+                  <thead><tr><th>日期</th><th>净资产</th><th>账户金额合计</th><th>Excel 合计</th><th>差异</th><th>差异率</th><th>状态</th></tr></thead>
                   <tbody>
                     {importQuality.rows.map((row) => (
                       <tr key={row.date}>
                         <td>{row.date}</td>
                         <td>{formatMoney(row.computedTotalCny)}</td>
+                        <td>{formatMoney(row.bookTotal)}</td>
                         <td>{formatMoney(row.excelTotal)}</td>
                         <td>{formatMoney(row.diff)}</td>
                         <td>{formatPercent(row.diffRatio)}</td>
