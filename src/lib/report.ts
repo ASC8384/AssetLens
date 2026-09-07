@@ -100,8 +100,7 @@ export function buildStructuredReportSummary(data: AppData, startDate: string, e
   const startRiskRatio = first.computedGrossAssetsCny === 0 ? null : (startTotals['基金'] + startTotals['证券']) / first.computedGrossAssetsCny;
   const endRiskRatio = last.computedGrossAssetsCny === 0 ? null : (endTotals['基金'] + endTotals['证券']) / last.computedGrossAssetsCny;
   const qualityMessages = dataQualityMessages(snapshots);
-  const incomeValues = snapshots.map((snapshot) => snapshot.externalIncome).filter((value): value is number => value !== null && value !== undefined);
-  const externalIncomeTotal = incomeValues.length > 0 ? incomeValues.reduce((sum, value) => sum + value, 0) : null;
+  const externalIncomeTotal = sumExternalIncome(snapshots);
 
   return {
     status: 'ready',
@@ -222,8 +221,9 @@ function periodicSummary(snapshots: AssetSnapshot[], mode: ReportMode): string {
 
 export { accountChanges };
 
+// 每期的外界收入代表上一期到这一期之间的流入，所以期初那一期不属于本区间。
 function sumExternalIncome(snapshots: AssetSnapshot[]): number | null {
-  const values = snapshots.map((snapshot) => snapshot.externalIncome).filter((value): value is number => value !== null && value !== undefined);
+  const values = snapshots.slice(1).map((snapshot) => snapshot.externalIncome).filter((value): value is number => value !== null && value !== undefined);
   return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) : null;
 }
 

@@ -32,8 +32,10 @@ export function Dashboard({ data }: { data: AppData }) {
   const strategy = analyzeStrategy(selected, data.strategy);
   const cashflow = periodCashflow(previous, selected, snapshots);
   const ratioBase = selected.computedGrossAssetsCny;
-  const resolvedIncome = resolveExternalIncome(snapshots, selected);
-  const incomeDateHint = externalIncomeDateLabel(resolvedIncome);
+  const incomeDateHint = externalIncomeDateLabel(resolveExternalIncome(snapshots, selected));
+  const incomeHint = incomeDateHint
+    ? (selected.note ? `${incomeDateHint} · ${selected.note}` : incomeDateHint)
+    : '尚未记录外界收入';
 
   return (
     <section className="dashboard">
@@ -103,12 +105,12 @@ export function Dashboard({ data }: { data: AppData }) {
         <Metric title="净资产" value={formatMoney(selected.computedTotalCny)} hint="总资产 − 负债" />
         <Metric title="总资产" value={formatMoney(selected.computedGrossAssetsCny)} hint="不含信用卡等欠款" />
         <Metric title="负债" value={formatMoney(selected.computedLiabilityCny)} hint="欠款按正数记录" tone={selected.computedLiabilityCny > 0 ? 'negative' : undefined} />
-        <Metric title="本期外界收入" value={formatMoney(resolvedIncome.amount)} hint={incomeDateHint ? (selected.note ? `${incomeDateHint} · ${selected.note}` : incomeDateHint) : '尚未记录外界收入'} />
+        <Metric title="账户数" value={`${selected.entries.length}`} hint="当前时点账户数量" />
       </div>
 
       <div className="insight-strip cashflow-strip">
         <div><span>较上一期净资产</span><strong className={(cashflow.netChange ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(cashflow.netChange)}</strong><small>{comparisonLabel}</small></div>
-        <div><span>本期外界收入</span><strong className="positive">{formatMoney(cashflow.externalIncome)}</strong><small>{incomeDateHint ?? '尚未记录外界收入'}</small></div>
+        <div><span>本期外界收入</span><strong className="positive">{formatMoney(cashflow.externalIncome)}</strong><small>{incomeHint}</small></div>
         <div><span>扣除收入后变化</span><strong className={(cashflow.afterIncomeChange ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(cashflow.afterIncomeChange)}</strong><small>剩余部分含理财与支出</small></div>
       </div>
 
