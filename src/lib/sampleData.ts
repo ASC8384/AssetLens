@@ -8,7 +8,7 @@ export function createSampleData(): AppData {
       id: crypto.randomUUID(),
       date: '2026-03-01',
       exchangeRates: { ...defaultExchangeRates },
-      excelTotal: 158000,
+      excelTotal: 160000,
       computedTotalCny: 0,
       entries: [
         entry('基金账户A', '基金', 52000, 0.329),
@@ -18,6 +18,7 @@ export function createSampleData(): AppData {
         entry('证券', '证券', 35000, 0.222),
         entry('证券账户B', '证券', 14000, 0.089),
         entry('银行卡D', '银行卡', 15000, 0.095),
+        entry('信用卡A', '负债', 2000, 0.012),
         entry('杂', '杂项', 6000, 0.038),
       ],
     }),
@@ -25,7 +26,7 @@ export function createSampleData(): AppData {
       id: crypto.randomUUID(),
       date: '2026-04-01',
       exchangeRates: { ...defaultExchangeRates },
-      excelTotal: 166500,
+      excelTotal: 169000,
       computedTotalCny: 0,
       entries: [
         entry('基金账户A', '基金', 56000, 0.336),
@@ -35,6 +36,7 @@ export function createSampleData(): AppData {
         entry('证券', '证券', 39000, 0.234),
         entry('证券账户B', '证券', 16000, 0.096),
         entry('银行卡D', '银行卡', 14000, 0.084),
+        entry('信用卡A', '负债', 2500, 0.015),
         entry('杂', '杂项', 5500, 0.033),
       ],
     }),
@@ -42,8 +44,10 @@ export function createSampleData(): AppData {
       id: crypto.randomUUID(),
       date: '2026-05-01',
       exchangeRates: { ...defaultExchangeRates },
-      excelTotal: 172000,
+      excelTotal: 175000,
       computedTotalCny: 0,
+      externalIncome: 12000,
+      note: '工资到账',
       entries: [
         entry('基金账户A', '基金', 59000, 0.343),
         entry('现金账户A', '现金', 10000, 0.058),
@@ -52,6 +56,7 @@ export function createSampleData(): AppData {
         entry('证券', '证券', 42000, 0.244),
         entry('证券账户B', '证券', 17500, 0.102),
         entry('银行卡D', '银行卡', 12500, 0.073),
+        entry('信用卡A', '负债', 3000, 0.017),
         entry('杂', '杂项', 5000, 0.029),
       ],
     }),
@@ -60,7 +65,7 @@ export function createSampleData(): AppData {
   return { ...data, snapshots, accounts: mergeAccounts([], snapshots) };
 }
 
-function entry(accountName: string, category: '基金' | '现金' | '证券' | '银行卡' | '杂项', amount: number, excelRatio: number) {
+function entry(accountName: string, category: '基金' | '现金' | '证券' | '银行卡' | '杂项' | '负债', amount: number, excelRatio: number) {
   return {
     accountId: accountName,
     accountName,

@@ -21,6 +21,7 @@ export function createDefaultStrategyConfig(): StrategyConfig {
       现金: 0.15,
       银行卡: 0.25,
       杂项: 0.05,
+      负债: 0,
     },
   };
 }
@@ -29,14 +30,15 @@ export function analyzeStrategy(snapshot: AssetSnapshot, config: StrategyConfig)
   const totals = categoryTotals(snapshot, []);
   const safeCash = totals['现金'] + totals['银行卡'];
   const riskAmount = totals['基金'] + totals['证券'];
-  const riskAssetRatio = snapshot.computedTotalCny === 0 ? null : riskAmount / snapshot.computedTotalCny;
+  const grossAssets = snapshot.computedGrossAssetsCny;
+  const riskAssetRatio = grossAssets === 0 ? null : riskAmount / grossAssets;
   const cashReserveGap = safeCash - config.cashReserveTarget;
   const riskStatus = riskAssetRatio === null || riskAssetRatio >= config.riskAssetMinRatio && riskAssetRatio <= config.riskAssetMaxRatio
     ? 'within'
     : riskAssetRatio < config.riskAssetMinRatio ? 'below' : 'above';
   const categoryDrifts = Object.entries(config.targetCategoryRatios).map(([category, targetRatio]) => {
     const typedCategory = category as AssetCategory;
-    const currentRatio = snapshot.computedTotalCny === 0 ? 0 : totals[typedCategory] / snapshot.computedTotalCny;
+    const currentRatio = grossAssets === 0 ? 0 : totals[typedCategory] / grossAssets;
     return { category: typedCategory, currentRatio, targetRatio: targetRatio ?? 0, drift: currentRatio - (targetRatio ?? 0) };
   });
   const suggestions: string[] = [];

@@ -1,4 +1,4 @@
-export type AssetCategory = '基金' | '现金' | '证券' | '银行卡' | '杂项';
+export type AssetCategory = '基金' | '现金' | '证券' | '银行卡' | '杂项' | '负债';
 
 export type AccountConfig = {
   id: string;
@@ -30,6 +30,10 @@ export type AssetSnapshot = {
   entries: AccountEntry[];
   excelTotal?: number;
   computedTotalCny: number;
+  computedGrossAssetsCny: number;
+  computedLiabilityCny: number;
+  externalIncome?: number | null;
+  note?: string;
 };
 
 export type StrategyConfig = {
@@ -61,7 +65,7 @@ export type AppData = {
   };
 };
 
-export type FieldRole = 'date' | 'account' | 'ratio' | 'total' | 'ignore';
+export type FieldRole = 'date' | 'account' | 'ratio' | 'total' | 'income' | 'note' | 'ignore';
 
 export type FieldMapping = {
   columnIndex: number;

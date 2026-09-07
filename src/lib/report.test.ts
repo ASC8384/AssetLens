@@ -65,12 +65,29 @@ describe('report helpers', () => {
       { category: '基金', start: 100, end: 160, change: 60 },
       { category: '现金', start: 50, end: 90, change: 40 },
     ]));
+    expect(summary.externalIncomeTotal).toBeNull();
+    expect(summary.endLiability).toBe(0);
     expect(summary.riskAssetRatioChange).toEqual({
       start: 100 / 150,
       end: 160 / 250,
       change: 160 / 250 - 100 / 150,
     });
     expect(summary.dataQualityMessages).toEqual(['数据质量未发现明显异常。']);
+  });
+
+  it('excludes the starting snapshot income from the range total', () => {
+    const withIncome: AppData = {
+      ...data,
+      snapshots: [
+        { ...snapshot('2026-01-01', 100, 50), externalIncome: 999 },
+        { ...snapshot('2026-02-01', 180, 30), externalIncome: 40 },
+        { ...snapshot('2026-04-01', 160, 90), externalIncome: 30 },
+      ],
+    };
+    const summary = buildStructuredReportSummary(withIncome, '2026-01-01', '2026-04-01', 'endpoint');
+
+    expect(summary.externalIncomeTotal).toBe(70);
+    expect(summary.afterIncomeChange).toBe(30);
   });
 
   it('returns an empty structured report summary for an empty range', () => {

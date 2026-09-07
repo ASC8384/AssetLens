@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { accountChanges, categoryTotals, totalChange } from '../lib/calculations';
-import { accountInsightSummary, accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, riskTrendData, selectedSnapshotContext } from '../lib/dashboard';
-import { categories, categoryColors } from '../lib/defaults';
+import { accountInsightSummary, accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext } from '../lib/dashboard';
+import { assetCategories, categories, categoryColors } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
+import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
 import { analyzeStrategy } from '../lib/strategy';
 import type { AppData } from '../lib/types';
 
@@ -18,7 +19,7 @@ export function Dashboard({ data }: { data: AppData }) {
   const comparisonSnapshots = previous ? [previous, selected] : [selected];
   const change = totalChange(comparisonSnapshots);
   const totals = categoryTotals(selected, data.accounts);
-  const categoryData = categories.map((category) => ({ name: category, value: totals[category] })).filter((item) => item.value > 0);
+  const categoryData = assetCategories.map((category) => ({ name: category, value: totals[category] })).filter((item) => item.value > 0);
   const trendData = categoryTrendData(data);
   const topChanges = accountChanges(comparisonSnapshots);
   const rankingRows = accountRankingRows(selected).slice(0, 8);
@@ -29,6 +30,12 @@ export function Dashboard({ data }: { data: AppData }) {
   const summary = dashboardSummary({ ...data, snapshots: [selected] });
   const accountInsights = accountInsightSummary(previous, selected);
   const strategy = analyzeStrategy(selected, data.strategy);
+  const cashflow = periodCashflow(previous, selected, snapshots);
+  const ratioBase = selected.computedGrossAssetsCny;
+  const incomeDateHint = externalIncomeDateLabel(resolveExternalIncome(snapshots, selected));
+  const incomeHint = incomeDateHint
+    ? (selected.note ? `${incomeDateHint} · ${selected.note}` : incomeDateHint)
+    : '尚未记录外界收入';
 
   return (
     <section className="dashboard">
@@ -79,7 +86,8 @@ export function Dashboard({ data }: { data: AppData }) {
 
       <div className="insight-strip">
         <div><span>主导资产</span><strong>{summary.leaderCategory ?? '—'}</strong><small>{formatMoney(summary.leaderAmount)}</small></div>
-        <div><span>风险资产</span><strong>{formatPercent(summary.riskAssetRatio)}</strong><small>基金 + 证券</small></div>
+        <div><span>风险资产</span><strong>{formatPercent(summary.riskAssetRatio)}</strong><small>基金 + 证券 / 总资产</small></div>
+        <div><span>负债</span><strong className={summary.liabilityAmount > 0 ? 'negative' : ''}>{formatMoney(summary.liabilityAmount)}</strong><small>信用卡等欠款</small></div>
         <div><span>选中时点</span><strong>{selected.date}</strong><small>{previous ? `对比 ${previous.date}` : '暂无前一期'}</small></div>
       </div>
 
@@ -94,14 +102,20 @@ export function Dashboard({ data }: { data: AppData }) {
       </div>
 
       <div className="metric-grid">
-        <Metric title="网页重算总资产" value={formatMoney(selected.computedTotalCny)} hint={selected.date} />
-        <Metric title="资产账户数" value={`${selected.entries.length}`} hint="当前时点账户数量" />
-        <Metric title="较上一期变化" value={formatMoney(change.amount)} hint="金额变化" tone={(change.amount ?? 0) >= 0 ? 'positive' : 'negative'} />
-        <Metric title="较上一期变化率" value={formatPercent(change.percent)} hint="百分比变化" tone={(change.percent ?? 0) >= 0 ? 'positive' : 'negative'} />
+        <Metric title="净资产" value={formatMoney(selected.computedTotalCny)} hint="总资产 − 负债" />
+        <Metric title="总资产" value={formatMoney(selected.computedGrossAssetsCny)} hint="不含信用卡等欠款" />
+        <Metric title="负债" value={formatMoney(selected.computedLiabilityCny)} hint="欠款按正数记录" tone={selected.computedLiabilityCny > 0 ? 'negative' : undefined} />
+        <Metric title="账户数" value={`${selected.entries.length}`} hint="当前时点账户数量" />
+      </div>
+
+      <div className="insight-strip cashflow-strip">
+        <div><span>较上一期净资产</span><strong className={(cashflow.netChange ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(cashflow.netChange)}</strong><small>{comparisonLabel}</small></div>
+        <div><span>本期外界收入</span><strong className="positive">{formatMoney(cashflow.externalIncome)}</strong><small>{incomeHint}</small></div>
+        <div><span>扣除收入后变化</span><strong className={(cashflow.afterIncomeChange ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(cashflow.afterIncomeChange)}</strong><small>剩余部分含理财与支出</small></div>
       </div>
 
       <div className="chart-grid main-charts dashboard-feature-grid">
-        <ChartCard title="总资产趋势（含分资产）" className="feature-chart">
+        <ChartCard title="净资产趋势（含分资产）" className="feature-chart">
           <ResponsiveContainer width="100%" height={340}>
             <LineChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -109,7 +123,7 @@ export function Dashboard({ data }: { data: AppData }) {
               <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
               <Tooltip formatter={(value) => formatMoney(Number(value))} />
               <Legend />
-              <Line type="monotone" dataKey="total" name="总资产" stroke="#0f172a" strokeWidth={3} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="total" name="净资产" stroke="#0f172a" strokeWidth={3} dot={{ r: 3 }} />
               {categories.map((category) => (
                 <Line key={category} type="monotone" dataKey={category} name={category} stroke={categoryColors[category]} strokeWidth={2} dot={false} />
               ))}
@@ -128,7 +142,7 @@ export function Dashboard({ data }: { data: AppData }) {
             </PieChart>
           </ResponsiveContainer>
           <div className="legend-list">
-            {categoryData.map((item) => <span key={item.name}><i style={{ background: categoryColors[item.name as keyof typeof categoryColors] }} />{item.name} {formatPercent(item.value / selected.computedTotalCny)}</span>)}
+            {categoryData.map((item) => <span key={item.name}><i style={{ background: categoryColors[item.name as keyof typeof categoryColors] }} />{item.name} {formatPercent(ratioBase === 0 ? null : item.value / ratioBase)}</span>)}
           </div>
         </ChartCard>
       </div>
@@ -223,7 +237,7 @@ export function Dashboard({ data }: { data: AppData }) {
               <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
               <Tooltip formatter={(value) => formatMoney(Number(value))} />
               <Legend />
-              {categories.map((category) => <Area key={category} type="monotone" dataKey={category} stackId="1" stroke={categoryColors[category]} fill={categoryColors[category]} />)}
+              {assetCategories.map((category) => <Area key={category} type="monotone" dataKey={category} stackId="1" stroke={categoryColors[category]} fill={categoryColors[category]} />)}
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>

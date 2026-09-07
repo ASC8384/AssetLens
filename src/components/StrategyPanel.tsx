@@ -44,10 +44,10 @@ export function StrategyPanel({ data, onChange }: { data: AppData; onChange: (da
       {expanded && (
         <div className="strategy-config-grid">
           <label><span>应急备用金目标<small>现金 + 银行卡至少保留的金额</small></span><input type="number" value={data.strategy.cashReserveTarget} onChange={(event) => updateStrategyNumber('cashReserveTarget', event.target.value)} /></label>
-          <label><span>风险资产下限%<small>基金 + 证券占总资产的最低比例</small></span><input type="number" value={Math.round(data.strategy.riskAssetMinRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMinRatio', event.target.value)} /></label>
-          <label><span>风险资产上限%<small>基金 + 证券占总资产的最高比例</small></span><input type="number" value={Math.round(data.strategy.riskAssetMaxRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMaxRatio', event.target.value)} /></label>
+          <label><span>风险资产下限%<small>基金 + 证券占资产总额（不含负债）的最低比例</small></span><input type="number" value={Math.round(data.strategy.riskAssetMinRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMinRatio', event.target.value)} /></label>
+          <label><span>风险资产上限%<small>基金 + 证券占资产总额（不含负债）的最高比例</small></span><input type="number" value={Math.round(data.strategy.riskAssetMaxRatio * 100)} onChange={(event) => updateStrategyNumber('riskAssetMaxRatio', event.target.value)} /></label>
           {categories.map((category) => (
-            <label key={category}><span>{category}目标占比%<small>期望该大类占总资产的比例</small></span><input type="number" value={Math.round((data.strategy.targetCategoryRatios[category] ?? 0) * 100)} onChange={(event) => updateTargetRatio(category, event.target.value)} /></label>
+            <label key={category}><span>{category}目标占比%<small>{category === '负债' ? '欠款占资产总额的比例，建议为 0' : '期望该大类占资产总额的比例'}</small></span><input type="number" value={Math.round((data.strategy.targetCategoryRatios[category] ?? 0) * 100)} onChange={(event) => updateTargetRatio(category, event.target.value)} /></label>
           ))}
         </div>
       )}

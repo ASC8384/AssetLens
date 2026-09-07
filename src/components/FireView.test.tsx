@@ -42,6 +42,7 @@ describe('FireView', () => {
     expect(screen.queryByText('按预期年化收益率')).toBeNull();
     expect(screen.queryByText('每月主动净投入')).toBeNull();
     expect(screen.queryByText('收入中断')).toBeNull();
+    expect(screen.getByText(/本期外界收入 · 记录于 2026-05-01/)).toBeTruthy();
   });
 
   it('shows return-only estimate as unavailable when current assets cannot compound', () => {

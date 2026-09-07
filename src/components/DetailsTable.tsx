@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { applyAccountsToSnapshots, buildEntry, recalculateSnapshot, sortSnapshots } from '../lib/calculations';
+import { applyAccountsToSnapshots, buildEntry, isLiabilityCategory, recalculateSnapshot, sortSnapshots } from '../lib/calculations';
 import { accountIdFromName, categories, createAccountConfig } from '../lib/defaults';
 import { filterAccounts, filterSnapshotsByIssue, sortSnapshotsForDetails, type DetailIssueFilter, type DetailSortMode } from '../lib/details';
 import { downloadText, formatMoney, parseNumber } from '../lib/format';
+import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
 import type { AccountConfig, AppData, AssetCategory, AssetSnapshot } from '../lib/types';
 
 export function DetailsTable({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
@@ -66,6 +67,13 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
     onChange({ ...data, snapshots });
   }
 
+  function updateSnapshotField(snapshotId: string, patch: Partial<AssetSnapshot>) {
+    onChange({
+      ...data,
+      snapshots: data.snapshots.map((snapshot) => snapshot.id === snapshotId ? recalculateSnapshot({ ...snapshot, ...patch }) : snapshot),
+    });
+  }
+
   function deleteSnapshot(snapshotId: string) {
     if (!window.confirm('确定删除这一期记录吗？')) return;
     onChange({ ...data, snapshots: data.snapshots.filter((snapshot) => snapshot.id !== snapshotId) });
@@ -117,10 +125,19 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
   }
 
   function exportCsv() {
-    const headers = ['时间', ...visibleAccounts.map((account) => account.name), 'Excel原合计', '网页重算合计'];
+    const headers = ['时间', ...visibleAccounts.map((account) => account.name), '外界收入', '备注', 'Excel原合计', '净资产', '总资产', '负债'];
     const lines = visibleSnapshots.map((snapshot) => {
       const entries = new Map(snapshot.entries.map((entry) => [entry.accountId, entry]));
-      return [snapshot.date, ...visibleAccounts.map((account) => entries.get(account.id)?.originalAmount ?? ''), snapshot.excelTotal ?? '', snapshot.computedTotalCny].join(',');
+      return [
+        snapshot.date,
+        ...visibleAccounts.map((account) => entries.get(account.id)?.originalAmount ?? ''),
+        snapshot.externalIncome ?? '',
+        snapshot.note ?? '',
+        snapshot.excelTotal ?? '',
+        snapshot.computedTotalCny,
+        snapshot.computedGrossAssetsCny,
+        snapshot.computedLiabilityCny,
+      ].join(',');
     });
     downloadText('asset-lens-details.csv', [headers.join(','), ...lines].join('\n'), 'text/csv');
   }
@@ -145,8 +162,8 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
           <select value={sortMode} onChange={(event) => setSortMode(event.target.value as DetailSortMode)}>
             <option value="date-desc">日期从新到旧</option>
             <option value="date-asc">日期从旧到新</option>
-            <option value="total-desc">总资产从高到低</option>
-            <option value="total-asc">总资产从低到高</option>
+            <option value="total-desc">净资产从高到低</option>
+            <option value="total-asc">净资产从低到高</option>
             <option value="diff-desc">合计差异优先</option>
           </select>
           <select value={issueFilter} onChange={(event) => updatePreference({ detailIssueFilter: event.target.value as DetailIssueFilter })}>
@@ -171,10 +188,14 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
             <tr>
               <th className="sticky-col">时间</th>
               {visibleAccounts.map((account) => mode === 'compact'
-                ? <th key={account.id}>{account.name}<small>{account.category} · <button className="link-button" onClick={() => renameAccount(account)}>改名</button> <button className="link-button" onClick={() => deleteAccount(account)}>删除</button></small></th>
-                : <th key={account.id} colSpan={4}>{account.name}<small>{account.category} · <button className="link-button" onClick={() => renameAccount(account)}>改名</button> <button className="link-button" onClick={() => deleteAccount(account)}>删除</button></small></th>)}
+                ? <th key={account.id} className={isLiabilityCategory(account.category) ? 'liability-col' : undefined}>{account.name}<small>{account.category}{isLiabilityCategory(account.category) ? ' · 欠款' : ''} · <button className="link-button" onClick={() => renameAccount(account)}>改名</button> <button className="link-button" onClick={() => deleteAccount(account)}>删除</button></small></th>
+                : <th key={account.id} colSpan={4} className={isLiabilityCategory(account.category) ? 'liability-col' : undefined}>{account.name}<small>{account.category}{isLiabilityCategory(account.category) ? ' · 欠款' : ''} · <button className="link-button" onClick={() => renameAccount(account)}>改名</button> <button className="link-button" onClick={() => deleteAccount(account)}>删除</button></small></th>)}
+              <th className="income-col">外界收入</th>
+              <th>备注</th>
               <th>Excel 原合计</th>
-              <th>网页重算合计</th>
+              <th>净资产</th>
+              <th>总资产</th>
+              <th>负债</th>
               <th>合计差异</th>
               <th>每期汇率</th>
               <th>操作</th>
@@ -182,7 +203,11 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
             {mode === 'analysis' && (
               <tr>
                 <th className="sticky-col">字段</th>
-                {visibleAccounts.map((account) => ['原始金额', '币种', '汇率', '折算人民币'].map((label) => <th key={`${account.id}-${label}`}>{label}</th>))}
+                {visibleAccounts.map((account) => ['原始金额', '币种', '汇率', '折算人民币'].map((label) => <th key={`${account.id}-${label}`} className={isLiabilityCategory(account.category) ? 'liability-col' : undefined}>{label}</th>))}
+                <th className="income-col" />
+                <th />
+                <th />
+                <th />
                 <th />
                 <th />
                 <th />
@@ -194,24 +219,33 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
           <tbody>
             {visibleSnapshots.map((snapshot) => {
               const entries = new Map(snapshot.entries.map((entry) => [entry.accountId, entry]));
+              const carriedIncome = resolveExternalIncome(data.snapshots, snapshot);
+              const incomeCarryLabel = carriedIncome.inherited ? externalIncomeDateLabel(carriedIncome) : null;
               return (
                 <tr key={snapshot.id}>
                   <td className="sticky-col"><strong>{snapshot.date}</strong></td>
                   {visibleAccounts.map((account) => {
                     const entry = entries.get(account.id);
                     if (mode === 'compact') {
-                      return <td key={account.id}><input value={entry?.originalAmount ?? ''} onChange={(event) => updateAmount(snapshot.id, account.id, event.target.value)} /></td>;
+                      return <td key={account.id} className={isLiabilityCategory(account.category) ? 'liability-col' : undefined}><input aria-label={`${snapshot.date}-${account.name}`} value={entry?.originalAmount ?? ''} onChange={(event) => updateAmount(snapshot.id, account.id, event.target.value)} /></td>;
                     }
                     return [
-                      <td key={`${account.id}-amount`}><input value={entry?.originalAmount ?? ''} onChange={(event) => updateAmount(snapshot.id, account.id, event.target.value)} /></td>,
-                      <td key={`${account.id}-currency`}><input aria-label={`${snapshot.date}-${account.name}-币种`} value={entry?.currency ?? account.defaultCurrency} onChange={(event) => updateEntryCurrency(snapshot.id, account.id, event.target.value)} /></td>,
-                      <td key={`${account.id}-rate`}><input aria-label={`${snapshot.date}-${account.name}-汇率`} value={entry?.exchangeRate ?? ''} disabled={(entry?.currency ?? account.defaultCurrency) === 'CNY'} onChange={(event) => updateEntryRate(snapshot.id, account.id, event.target.value)} /></td>,
-                      <td key={`${account.id}-cny`}>{formatMoney(entry?.amountCny)}</td>,
+                      <td key={`${account.id}-amount`} className={isLiabilityCategory(account.category) ? 'liability-col' : undefined}><input value={entry?.originalAmount ?? ''} onChange={(event) => updateAmount(snapshot.id, account.id, event.target.value)} /></td>,
+                      <td key={`${account.id}-currency`} className={isLiabilityCategory(account.category) ? 'liability-col' : undefined}><input aria-label={`${snapshot.date}-${account.name}-币种`} value={entry?.currency ?? account.defaultCurrency} onChange={(event) => updateEntryCurrency(snapshot.id, account.id, event.target.value)} /></td>,
+                      <td key={`${account.id}-rate`} className={isLiabilityCategory(account.category) ? 'liability-col' : undefined}><input aria-label={`${snapshot.date}-${account.name}-汇率`} value={entry?.exchangeRate ?? ''} disabled={(entry?.currency ?? account.defaultCurrency) === 'CNY'} onChange={(event) => updateEntryRate(snapshot.id, account.id, event.target.value)} /></td>,
+                      <td key={`${account.id}-cny`} className={isLiabilityCategory(account.category) ? 'liability-col' : undefined}>{formatMoney(entry?.amountCny)}</td>,
                     ];
                   })}
+                  <td className="income-col">
+                    <input aria-label={`${snapshot.date}-外界收入`} value={snapshot.externalIncome ?? ''} placeholder={incomeCarryLabel ?? ''} onChange={(event) => updateSnapshotField(snapshot.id, { externalIncome: parseNumber(event.target.value) })} />
+                    {incomeCarryLabel && <small className="income-carry-hint">{incomeCarryLabel}</small>}
+                  </td>
+                  <td><input aria-label={`${snapshot.date}-备注`} value={snapshot.note ?? ''} onChange={(event) => updateSnapshotField(snapshot.id, { note: event.target.value })} /></td>
                   <td>{formatMoney(snapshot.excelTotal)}</td>
                   <td>{formatMoney(snapshot.computedTotalCny)}</td>
-                  <td>{formatMoney(snapshot.excelTotal === undefined ? null : snapshot.computedTotalCny - snapshot.excelTotal)}</td>
+                  <td>{formatMoney(snapshot.computedGrossAssetsCny)}</td>
+                  <td>{formatMoney(snapshot.computedLiabilityCny)}</td>
+                  <td>{formatMoney(snapshot.excelTotal === undefined ? null : snapshot.computedGrossAssetsCny + snapshot.computedLiabilityCny - snapshot.excelTotal)}</td>
                   <td><RateEditor snapshot={snapshot} onUpdate={updateSnapshotRate} /></td>
                   <td className="row-actions"><button onClick={() => duplicateSnapshot(snapshot)}>复制</button><button onClick={() => deleteSnapshot(snapshot.id)}>删除</button></td>
                 </tr>

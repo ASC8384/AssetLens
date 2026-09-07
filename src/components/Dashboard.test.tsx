@@ -47,6 +47,9 @@ describe('Dashboard', () => {
     expect(screen.getByText('增长账户 Top 5')).toBeTruthy();
     expect(screen.getByText('下降账户 Top 5')).toBeTruthy();
     expect(screen.getByText('账户集中度')).toBeTruthy();
+    expect(screen.getByText('净资产')).toBeTruthy();
+    expect(screen.getAllByText('负债').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('本期外界收入').length).toBeGreaterThan(0);
   });
 
   it('labels duplicate-date snapshots so users can distinguish kept imports', () => {
@@ -63,5 +66,20 @@ describe('Dashboard', () => {
 
     expect(screen.getByRole('option', { name: '2026-02-01 · 同日第 1 条' })).toBeTruthy();
     expect(screen.getByRole('option', { name: '2026-02-01 · 同日第 2 条' })).toBeTruthy();
+  });
+
+  it('reuses the last recorded external income and marks its date', () => {
+    const data = {
+      ...createSampleData(),
+      snapshots: [
+        { ...snapshot('jan', '2026-01-01', 100), externalIncome: 8000 },
+        snapshot('feb', '2026-02-01', 120),
+      ],
+    };
+
+    render(<Dashboard data={data} />);
+
+    expect(screen.getAllByText(/沿用 2026-01-01/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('¥8,000.00').length).toBeGreaterThan(0);
   });
 });

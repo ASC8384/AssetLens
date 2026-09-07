@@ -61,7 +61,7 @@ export default function App() {
       {data.snapshots.length === 0 && (
         <section className="onboarding panel">
           <div><span className="eyebrow">GET STARTED</span><h2>三步开始分析资产</h2></div>
-          <ol><li>展开导入区，上传 Excel 或粘贴表格。</li><li>检查字段映射和导入质量，必要时忽略合计列。</li><li>查看仪表盘、明细表和复盘报告。</li></ol>
+          <ol><li>展开导入区，上传 Excel 或粘贴表格。</li><li>检查字段映射：信用卡归入负债，收入列识别为外界收入。</li><li>查看仪表盘净资产、明细表和复盘报告。</li></ol>
           <button className="primary" onClick={() => updateData(createSampleData(), '已载入示例数据')}>先看示例数据</button>
         </section>
       )}

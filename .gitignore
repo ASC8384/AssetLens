@@ -4,4 +4,15 @@
 node_modules/
 dist/
 .DS_Store
-asset-lens-dashboard.png
+
+# 个人资产数据绝不入库：导入源文件、导出结果、备份和截图
+*.xlsx
+*.xls
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.webp
+asset-lens-*.json
+backup*.json
+*-backup.json

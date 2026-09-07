@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { accountInsightSummary, accountRankingRows, analyzeDataHealth, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, riskTrendData, selectedSnapshotContext } from './dashboard';
+import { accountInsightSummary, accountRankingRows, analyzeDataHealth, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext } from './dashboard';
+import { resolveExternalIncome } from './income';
 import { recalculateSnapshot } from './calculations';
 import type { AppData, AssetSnapshot } from './types';
 
@@ -288,5 +289,58 @@ describe('dailyNetChangeRows', () => {
     expect(dailyNetChangeRows(data)).toEqual([
       { startDate: '2026-01-01', endDate: '2026-01-11', days: 10, totalChange: 100, dailyChange: 10 },
     ]);
+  });
+});
+
+describe('periodCashflow', () => {
+  it('separates external income from net-worth change', () => {
+    const previous = snapshot('2026-01-01', 100, 40);
+    const selected = { ...snapshot('2026-02-01', 120, 80), externalIncome: 50 };
+
+    expect(periodCashflow(previous, selected, [previous, selected])).toEqual({
+      netChange: 60,
+      externalIncome: 50,
+      externalIncomeSourceDate: '2026-02-01',
+      externalIncomeInherited: false,
+      afterIncomeChange: 10,
+    });
+  });
+
+  it('carries the last recorded external income when the selected snapshot has none', () => {
+    const previous = { ...snapshot('2026-01-01', 100, 40), externalIncome: 50 };
+    const selected = snapshot('2026-02-01', 120, 80);
+
+    expect(periodCashflow(previous, selected, [previous, selected])).toEqual({
+      netChange: 60,
+      externalIncome: 50,
+      externalIncomeSourceDate: '2026-01-01',
+      externalIncomeInherited: true,
+      afterIncomeChange: 10,
+    });
+  });
+});
+
+describe('resolveExternalIncome', () => {
+  it('keeps an explicit zero instead of inheriting the previous period', () => {
+    const previous = { ...snapshot('2026-01-01', 100, 40), externalIncome: 50 };
+    const selected = { ...snapshot('2026-02-01', 120, 80), externalIncome: 0 };
+
+    expect(resolveExternalIncome([previous, selected], selected)).toEqual({
+      amount: 0,
+      sourceDate: '2026-02-01',
+      inherited: false,
+    });
+  });
+
+  it('walks back past empty snapshots to the last recorded income', () => {
+    const first = { ...snapshot('2026-01-01', 100, 40), externalIncome: 80 };
+    const middle = snapshot('2026-02-01', 110, 50);
+    const latest = snapshot('2026-03-01', 120, 60);
+
+    expect(resolveExternalIncome([first, middle, latest], latest)).toEqual({
+      amount: 80,
+      sourceDate: '2026-01-01',
+      inherited: true,
+    });
   });
 });

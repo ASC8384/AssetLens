@@ -24,6 +24,8 @@ describe('parseNumber', () => {
     expect(parseNumber('-')).toBeNull();
     expect(parseNumber('')).toBeNull();
     expect(parseNumber('12.5%')).toBe(0.125);
+    expect(parseNumber('$1,234.56')).toBe(1234.56);
+    expect(parseNumber('(¥1,234.56)')).toBe(-1234.56);
   });
 });
 
@@ -56,6 +58,26 @@ describe('recalculateSnapshot', () => {
 
     expect(snapshot.entries[0].amountCny).toBeNull();
     expect(snapshot.computedTotalCny).toBe(0);
+  });
+
+  it('subtracts liability accounts from net worth and keeps book total for excel comparison', () => {
+    const snapshot = recalculateSnapshot({
+      id: 's1',
+      date: '2026-05-01',
+      exchangeRates: { CNY: 1 },
+      computedTotalCny: 0,
+      excelTotal: 103000,
+      entries: [
+        { ...baseEntry, originalAmount: 100000, excelRatio: 100000 / 103000 },
+        { ...baseEntry, accountId: 'visa', accountName: '信用卡Visa', category: '负债', originalAmount: 3000, excelRatio: 3000 / 103000 },
+      ],
+    });
+
+    expect(snapshot.computedGrossAssetsCny).toBe(100000);
+    expect(snapshot.computedLiabilityCny).toBe(3000);
+    expect(snapshot.computedTotalCny).toBe(97000);
+    expect(snapshot.entries[1].computedRatio).toBeCloseTo(3000 / 103000);
+    expect(totalQuality(snapshot).status).toBe('ok');
   });
 });
 
@@ -111,5 +133,29 @@ describe('importers', () => {
     expect(snapshots[0].entries[7]).toMatchObject({ accountName: '杂', originalAmount: 12000, excelRatio: null });
     expect(snapshots[0].entries[8]).toMatchObject({ accountName: '基金账户D', originalAmount: 3000, excelRatio: null });
     expect(snapshots[0].excelTotal).toBe(8500);
+  });
+
+  it('maps credit cards to liabilities and income/note columns on a spreadsheet-style paste', () => {
+    const parsed = parsePastedTable(`时间	基金账户A	占比	信用卡Visa	占比	合计	备注	时长	变动	日均	收入	结余
+2026/9/4	¥10,000.00	95.24%	¥500.00	4.76%	¥10,500.00	示例备注	15	(¥200.00)	(¥13.33)	¥3,000.00	¥3,200.00`);
+    const draft = createImportDraft(parsed);
+    const byHeader = Object.fromEntries(draft.mappings.map((mapping) => [mapping.header, mapping]));
+
+    expect(byHeader['信用卡Visa']).toMatchObject({ role: 'account', category: '负债', import: true });
+    expect(byHeader['收入']).toMatchObject({ role: 'income', import: true });
+    expect(byHeader['备注']).toMatchObject({ role: 'note', import: true });
+    expect(byHeader['时长']).toMatchObject({ role: 'ignore', import: false });
+    expect(byHeader['变动']).toMatchObject({ role: 'ignore', import: false });
+    expect(byHeader['日均']).toMatchObject({ role: 'ignore', import: false });
+    expect(byHeader['结余']).toMatchObject({ role: 'ignore', import: false });
+
+    const { snapshots } = buildSnapshotsFromDraft(draft, []);
+    expect(snapshots[0].date).toBe('2026-09-04');
+    expect(snapshots[0].externalIncome).toBe(3000);
+    expect(snapshots[0].note).toBe('示例备注');
+    expect(snapshots[0].computedGrossAssetsCny).toBeCloseTo(10000);
+    expect(snapshots[0].computedLiabilityCny).toBeCloseTo(500);
+    expect(snapshots[0].computedTotalCny).toBeCloseTo(9500);
+    expect(snapshots[0].entries.find((entry) => entry.accountName === '信用卡Visa')?.category).toBe('负债');
   });
 });

@@ -50,8 +50,10 @@ export function ReviewReport({ data }: { data: AppData }) {
           <div className="report-summary-grid">
             <div className="chart-card"><span>复盘区间</span><strong>{summary.startDate} → {summary.endDate}</strong><small>{summary.snapshotCount} 期快照</small></div>
             <div className="chart-card"><span>期初 / 期末</span><strong>{formatMoney(summary.startTotal)} → {formatMoney(summary.endTotal)}</strong><small>所选范围首尾快照</small></div>
-            <div className="chart-card"><span>总资产变化</span><strong className={(summary.totalChange ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(summary.totalChange)}</strong><small>{formatPercent(summary.growth)}</small></div>
+            <div className="chart-card"><span>净资产变化</span><strong className={(summary.totalChange ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(summary.totalChange)}</strong><small>{formatPercent(summary.growth)}</small></div>
             <div className="chart-card"><span>风险资产占比变化</span><strong>{formatPercent(summary.riskAssetRatioChange.start)} → {formatPercent(summary.riskAssetRatioChange.end)}</strong><small>{formatPercent(summary.riskAssetRatioChange.change)}</small></div>
+            <div className="chart-card"><span>负债变化</span><strong className={(summary.liabilityChange ?? 0) > 0 ? 'negative' : 'positive'}>{formatMoney(summary.startLiability)} → {formatMoney(summary.endLiability)}</strong><small>欠款 {formatMoney(summary.liabilityChange)}</small></div>
+            <div className="chart-card"><span>外界收入合计</span><strong className="positive">{formatMoney(summary.externalIncomeTotal)}</strong><small>扣除收入后 {formatMoney(summary.afterIncomeChange)}</small></div>
           </div>
 
           <div className="report-insights">

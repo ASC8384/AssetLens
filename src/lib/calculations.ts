@@ -1,7 +1,21 @@
 import type { AccountConfig, AccountEntry, AppData, AssetCategory, AssetSnapshot } from './types';
 import { accountIdFromName, categories, createAccountConfig } from './defaults';
 
-export function recalculateSnapshot(snapshot: AssetSnapshot): AssetSnapshot {
+type SnapshotInput = Omit<AssetSnapshot, 'computedGrossAssetsCny' | 'computedLiabilityCny' | 'computedTotalCny'> & {
+  computedTotalCny?: number;
+  computedGrossAssetsCny?: number;
+  computedLiabilityCny?: number;
+};
+
+export function isLiabilityCategory(category: AssetCategory): boolean {
+  return category === '负债';
+}
+
+export function snapshotBookTotal(snapshot: Pick<AssetSnapshot, 'computedGrossAssetsCny' | 'computedLiabilityCny'>): number {
+  return snapshot.computedGrossAssetsCny + snapshot.computedLiabilityCny;
+}
+
+export function recalculateSnapshot(snapshot: SnapshotInput): AssetSnapshot {
   const entriesWithCny = snapshot.entries.map((entry) => {
     const exchangeRate = entry.currency === 'CNY' ? 1 : snapshot.exchangeRates[entry.currency] ?? entry.exchangeRate;
     const amountCny = entry.originalAmount === null || exchangeRate === null || exchangeRate === undefined
@@ -10,14 +24,19 @@ export function recalculateSnapshot(snapshot: AssetSnapshot): AssetSnapshot {
     return { ...entry, exchangeRate: exchangeRate ?? null, amountCny };
   });
 
-  const computedTotalCny = entriesWithCny.reduce((sum, entry) => {
-    if (!entry.includedInTotal || entry.amountCny === null) return sum;
-    return sum + entry.amountCny;
-  }, 0);
+  let computedGrossAssetsCny = 0;
+  let computedLiabilityCny = 0;
+  for (const entry of entriesWithCny) {
+    if (!entry.includedInTotal || entry.amountCny === null) continue;
+    if (isLiabilityCategory(entry.category)) computedLiabilityCny += entry.amountCny;
+    else computedGrossAssetsCny += entry.amountCny;
+  }
+  const bookTotal = computedGrossAssetsCny + computedLiabilityCny;
+  const computedTotalCny = computedGrossAssetsCny - computedLiabilityCny;
 
   const entries = entriesWithCny.map((entry) => {
-    const computedRatio = entry.includedInTotal && entry.amountCny !== null && computedTotalCny > 0
-      ? entry.amountCny / computedTotalCny
+    const computedRatio = entry.includedInTotal && entry.amountCny !== null && bookTotal > 0
+      ? entry.amountCny / bookTotal
       : null;
     const ratioDiff = computedRatio !== null && entry.excelRatio !== null && entry.excelRatio !== undefined
       ? computedRatio - entry.excelRatio
@@ -25,7 +44,7 @@ export function recalculateSnapshot(snapshot: AssetSnapshot): AssetSnapshot {
     return { ...entry, computedRatio, ratioDiff };
   });
 
-  return { ...snapshot, entries, computedTotalCny };
+  return { ...snapshot, entries, computedTotalCny, computedGrossAssetsCny, computedLiabilityCny };
 }
 
 export function recalculateData(data: AppData): AppData {
