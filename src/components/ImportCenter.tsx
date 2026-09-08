@@ -72,9 +72,13 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
   const [manualDraft, setManualDraft] = useState<ManualDraft | null>(null);
   const [pasteText, setPasteText] = useState('');
   const [duplicateMode, setDuplicateMode] = useState<DuplicateDateMode>('overwrite');
-  const importedPreview = useMemo(() => draft ? buildSnapshotsFromDraft(draft, data.accounts) : null, [draft, data.accounts]);
+  const importedPreview = useMemo(() => draft ? buildSnapshotsFromDraft(draft, data.accounts, data.defaultExchangeRates) : null, [draft, data.accounts, data.defaultExchangeRates]);
   const importQuality = useMemo(() => importedPreview ? analyzeImportQuality(importedPreview.snapshots, importedPreview.accounts.length) : null, [importedPreview]);
   const manualAccountList = useMemo(() => manualAccounts(data), [data]);
+  const foreignMappings = useMemo(
+    () => draft?.mappings.filter((mapping) => mapping.role === 'account' && mapping.import && (mapping.currency ?? 'CNY') !== 'CNY') ?? [],
+    [draft],
+  );
 
   useEffect(() => {
     if (manualInputRequest <= 0) return;
@@ -131,7 +135,7 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
 
   function confirmImport() {
     if (!draft) return;
-    const imported = buildSnapshotsFromDraft(draft, data.accounts);
+    const imported = buildSnapshotsFromDraft(draft, data.accounts, data.defaultExchangeRates);
     const quality = analyzeImportQuality(imported.snapshots, imported.accounts.length);
     const nextData = mergeImportedData(data, imported.snapshots, imported.accounts, duplicateMode);
     if (onImportComplete) {
@@ -185,6 +189,7 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
           <li>信用卡、花呗等欠款请归入 <code>负债</code>；金额填欠款正数，会从净资产中扣除。</li>
           <li><code>收入</code> 列会识别为外界收入（工资等非理财流入），<code>备注</code> 会一并导入。</li>
           <li><code>时长</code>、<code>变动</code>、<code>日均</code>、<code>结余</code> 等派生列默认忽略。</li>
+          <li>外币账户：上传 .xlsx 时会读取 <code>合计</code> 公式里的折算倍数（如 <code>*0.9</code>）自动判断币种；粘贴文本读不到公式，请在下方“币种”列手动改，汇率在“账户与汇率配置”里调。</li>
         </ul>
         <pre>{`时间\t基金账户A\t占比\t现金账户A\t占比\t合计
 2026-05-01\t59000\t34.3%\t10000\t5.8%\t69000`}</pre>
@@ -271,6 +276,14 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
               <button onClick={() => setDraft(null)}>取消</button>
             </div>
           </div>
+
+          {foreignMappings.length > 0 && (
+            <p className="fx-detected">
+              识别到 {foreignMappings.length} 个外币列：
+              {foreignMappings.map((mapping) => `${mapping.accountName || mapping.header}（${mapping.currency}）`).join('、')}
+              。折算按「账户与汇率配置」里的汇率，可在下表“币种”列修正。
+            </p>
+          )}
 
           <div className="table-wrap">
             <table>

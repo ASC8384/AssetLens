@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { accountIdFromName, categoryForAccount, createAccountConfig, defaultExchangeRates } from './defaults';
-import { buildEntry, mergeAccounts, recalculateSnapshot, sortSnapshots } from './calculations';
+import { applyAccountsToSnapshots, buildEntry, mergeAccounts, recalculateSnapshot, sortSnapshots } from './calculations';
 import { parseNumber } from './format';
 import type { AccountConfig, AppData, AssetSnapshot, DuplicateDateMode, FieldMapping, ImportDraft, ParsedTable } from './types';
 
@@ -35,14 +35,59 @@ function looksLikeDataRow(row: string[]): boolean {
 
 export async function parseExcelFile(file: File): Promise<ParsedTable> {
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, cellFormula: true });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<Array<string | number | Date | null>>(sheet, { header: 1, raw: false, defval: '' });
   const [headers = [], ...dataRows] = rows;
+  const normalizedHeaders = headers.map((header) => String(header).trim());
   return {
-    headers: headers.map((header) => String(header).trim()),
+    headers: normalizedHeaders,
     rows: dataRows.map((row) => row.map((cell) => String(cell ?? '').trim())).filter((row) => row.some(Boolean)),
+    columnRateHints: readColumnRateHints(sheet, normalizedHeaders),
   };
+}
+
+function isTotalHeader(header: string): boolean {
+  return header === '合计' || header.toLowerCase() === 'total';
+}
+
+/**
+ * 手工维护的表格常把外币折算写进「合计」公式，例如 `(B2+C2)*0.9+D2*7`。
+ * 表格里这些列往往仍显示成人民币格式，只有公式能说明它们是外币，
+ * 所以从最后一条有公式的记录里取乘数，作为币种推断依据。
+ */
+function readColumnRateHints(sheet: XLSX.WorkSheet, headers: string[]): Record<number, number> {
+  const totalColumn = headers.findIndex(isTotalHeader);
+  const ref = sheet['!ref'];
+  if (totalColumn === -1 || !ref) return {};
+  const range = XLSX.utils.decode_range(ref);
+  for (let row = range.e.r; row > range.s.r; row -= 1) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: row, c: totalColumn })] as XLSX.CellObject | undefined;
+    if (typeof cell?.f !== 'string' || !cell.f) continue;
+    const hints = parseRateHintsFromFormula(cell.f);
+    if (Object.keys(hints).length > 0) return hints;
+  }
+  return {};
+}
+
+const scaledGroupPattern = /\(([^()]*)\)\s*\*\s*(\d+(?:\.\d+)?)/g;
+const scaledCellPattern = /\$?([A-Z]{1,3})\$?\d+\s*\*\s*(\d+(?:\.\d+)?)/g;
+const cellRefPattern = /\$?([A-Z]{1,3})\$?\d+/g;
+
+function parseRateHintsFromFormula(formula: string): Record<number, number> {
+  const hints: Record<number, number> = {};
+  const addHints = (columnLetters: string[], rate: number) => {
+    if (!Number.isFinite(rate) || rate === 1) return;
+    for (const letter of columnLetters) hints[XLSX.utils.decode_col(letter)] = rate;
+  };
+  const remaining = formula.replace(scaledGroupPattern, (_match, group: string, rate: string) => {
+    addHints([...group.matchAll(cellRefPattern)].map((match) => match[1]), Number(rate));
+    return ' ';
+  });
+  for (const match of remaining.matchAll(scaledCellPattern)) {
+    addHints([match[1]], Number(match[2]));
+  }
+  return hints;
 }
 
 export function createImportDraft(parsed: ParsedTable): ImportDraft {
@@ -52,11 +97,12 @@ export function createImportDraft(parsed: ParsedTable): ImportDraft {
 export function inferFieldMappings(parsed: ParsedTable): FieldMapping[] {
   return parsed.headers.map((header, columnIndex) => {
     const normalized = header.trim();
-    const sampleValues = parsed.rows.slice(0, 3).map((row) => row[columnIndex] ?? '');
+    const columnValues = parsed.rows.map((row) => row[columnIndex] ?? '');
+    const sampleValues = columnValues.filter(Boolean).slice(0, 3);
     if (normalized === '时间' || normalized.toLowerCase() === 'date') {
       return { columnIndex, header, role: 'date', import: true, sampleValues };
     }
-    if (normalized === '合计' || normalized.toLowerCase() === 'total') {
+    if (isTotalHeader(normalized)) {
       return { columnIndex, header, role: 'total', import: true, sampleValues };
     }
     if (normalized === '占比') {
@@ -83,7 +129,7 @@ export function inferFieldMappings(parsed: ParsedTable): FieldMapping[] {
       role: 'account',
       accountName: normalized,
       category: categoryForAccount(normalized),
-      currency: inferCurrency(sampleValues),
+      currency: inferCurrency(columnValues, parsed.columnRateHints?.[columnIndex]),
       includedInTotal: true,
       import: true,
       sampleValues,
@@ -91,11 +137,29 @@ export function inferFieldMappings(parsed: ParsedTable): FieldMapping[] {
   });
 }
 
-function inferCurrency(sampleValues: string[]): string {
-  const joined = sampleValues.join(' ');
-  if (/HK\$|HKD/i.test(joined)) return 'HKD';
-  if (/\$|USD|美元/.test(joined) && !/[¥￥]/.test(joined)) return 'USD';
+function inferCurrency(columnValues: string[], rateHint?: number): string {
+  const hinted = rateHint === undefined ? null : currencyForRate(rateHint);
+  if (hinted) return hinted;
+  const joined = columnValues.join(' ');
+  if (/HK\$|HKD|港[币元]/i.test(joined)) return 'HKD';
+  if (/US\$|USD|美元/i.test(joined)) return 'USD';
+  if (/\$/.test(joined) && !/[¥￥]/.test(joined)) return 'USD';
   return 'CNY';
+}
+
+/** 把公式里的汇率乘数映射回已知币种，允许一定误差以容忍手写的近似汇率。 */
+function currencyForRate(rate: number): string | null {
+  let matched: string | null = null;
+  let smallestDiff = Infinity;
+  for (const [currency, value] of Object.entries(defaultExchangeRates)) {
+    if (currency === 'CNY') continue;
+    const diff = Math.abs(value - rate);
+    if (diff < smallestDiff) {
+      smallestDiff = diff;
+      matched = currency;
+    }
+  }
+  return matched !== null && smallestDiff <= Math.max(0.05, rate * 0.1) ? matched : null;
 }
 
 function findPreviousAccountColumn(headers: string[], columnIndex: number): number | null {
@@ -107,7 +171,11 @@ function findPreviousAccountColumn(headers: string[], columnIndex: number): numb
   return null;
 }
 
-export function buildSnapshotsFromDraft(draft: ImportDraft, existingAccounts: AccountConfig[]): { snapshots: AssetSnapshot[]; accounts: AccountConfig[] } {
+export function buildSnapshotsFromDraft(
+  draft: ImportDraft,
+  existingAccounts: AccountConfig[],
+  exchangeRates: Record<string, number> = defaultExchangeRates,
+): { snapshots: AssetSnapshot[]; accounts: AccountConfig[] } {
   const dateMapping = draft.mappings.find((mapping) => mapping.role === 'date' && mapping.import);
   const totalMapping = draft.mappings.find((mapping) => mapping.role === 'total' && mapping.import);
   const incomeMapping = draft.mappings.find((mapping) => mapping.role === 'income' && mapping.import);
@@ -122,18 +190,22 @@ export function buildSnapshotsFromDraft(draft: ImportDraft, existingAccounts: Ac
   for (const mapping of accountMappings) {
     const name = mapping.accountName || mapping.header;
     const id = accountIdFromName(name);
-    if (!accountMap.has(id)) {
-      accountMap.set(id, {
-        ...createAccountConfig(name),
-        category: mapping.category ?? categoryForAccount(name),
-        defaultCurrency: mapping.currency ?? 'CNY',
-        includedInTotal: mapping.includedInTotal ?? true,
-      });
-    }
+    const existing = accountMap.get(id);
+    accountMap.set(id, {
+      ...(existing ?? createAccountConfig(name)),
+      category: mapping.category ?? existing?.category ?? categoryForAccount(name),
+      defaultCurrency: mapping.currency ?? existing?.defaultCurrency ?? 'CNY',
+      includedInTotal: mapping.includedInTotal ?? existing?.includedInTotal ?? true,
+    });
   }
   const accounts = [...accountMap.values()];
 
-  const snapshots = draft.parsed.rows.map((row, rowIndex) => {
+  // 表格末尾常有只剩合计公式的空行，没有日期就不是一期快照，否则会混进 0 值记录。
+  const rows = dateMapping
+    ? draft.parsed.rows.filter((row) => String(row[dateMapping.columnIndex] ?? '').trim() !== '')
+    : draft.parsed.rows;
+
+  const snapshots = rows.map((row, rowIndex) => {
     const dateValue = dateMapping ? row[dateMapping.columnIndex] : '';
     const date = normalizeDate(dateValue, rowIndex);
     const entries = accountMappings.map((mapping) => {
@@ -150,7 +222,7 @@ export function buildSnapshotsFromDraft(draft: ImportDraft, existingAccounts: Ac
     return recalculateSnapshot({
       id: crypto.randomUUID(),
       date,
-      exchangeRates: { ...defaultExchangeRates },
+      exchangeRates: { ...exchangeRates },
       entries,
       excelTotal: totalMapping ? parseNumber(row[totalMapping.columnIndex]) ?? undefined : undefined,
       computedTotalCny: 0,
@@ -183,10 +255,11 @@ export function mergeImportedData(data: AppData, imported: AssetSnapshot[], acco
     }
     seenDates.add(snapshot.date);
   }
+  const mergedAccounts = mergeAccounts(accounts, merged);
   return {
     ...data,
-    accounts: mergeAccounts(accounts, merged),
-    snapshots: sortSnapshots(merged.map(recalculateSnapshot)),
+    accounts: mergedAccounts,
+    snapshots: sortSnapshots(applyAccountsToSnapshots(merged, mergedAccounts)),
   };
 }
 

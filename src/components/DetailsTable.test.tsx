@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DetailsTable } from './DetailsTable';
 import { createSampleData } from '../lib/sampleData';
+import { defaultExchangeRates } from '../lib/defaults';
 import type { AppData } from '../lib/types';
 
 function analysisData(): AppData {
@@ -21,8 +22,8 @@ describe('DetailsTable', () => {
     const latest = updatedData.snapshots[updatedData.snapshots.length - 1];
     const entry = latest.entries.find((item) => item.accountName === '基金账户A');
 
-    expect(entry).toMatchObject({ currency: 'USD', exchangeRate: 7.24 });
-    expect(entry?.amountCny).toBeCloseTo(59000 * 7.24);
+    expect(entry).toMatchObject({ currency: 'USD', exchangeRate: defaultExchangeRates.USD });
+    expect(entry?.amountCny).toBeCloseTo(59000 * defaultExchangeRates.USD);
   });
 
   it('edits an account exchange rate in analysis mode and recalculates CNY amount', () => {

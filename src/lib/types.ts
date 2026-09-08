@@ -83,6 +83,8 @@ export type FieldMapping = {
 export type ParsedTable = {
   headers: string[];
   rows: string[][];
+  /** 「合计」公式里对某列使用的汇率乘数，用于识别外币列；columnIndex -> 乘数 */
+  columnRateHints?: Record<number, number>;
 };
 
 export type ImportDraft = {

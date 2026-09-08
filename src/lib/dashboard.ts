@@ -14,9 +14,13 @@ export function totalQuality(snapshot: AssetSnapshot | undefined): TotalQuality 
   if (!snapshot || snapshot.excelTotal === undefined) {
     return { status: 'missing', diff: null, diffRatio: null, message: '没有 Excel 原合计可对照。' };
   }
-  const bookTotal = snapshotBookTotal(snapshot);
-  const diff = bookTotal - snapshot.excelTotal;
-  const diffRatio = bookTotal === 0 ? null : diff / bookTotal;
+  // 表格里的合计列有两种常见口径：已扣负债的净资产，或各账户金额直接相加。
+  // 取更接近的一种作对照，否则只要存在负债账户就会把正常数据判成异常。
+  const excelTotal = snapshot.excelTotal;
+  const comparable = [snapshot.computedTotalCny, snapshotBookTotal(snapshot)]
+    .reduce((closest, value) => Math.abs(value - excelTotal) < Math.abs(closest - excelTotal) ? value : closest);
+  const diff = comparable - excelTotal;
+  const diffRatio = comparable === 0 ? null : diff / comparable;
   const absRatio = Math.abs(diffRatio ?? 0);
   if (absRatio >= 0.05) return { status: 'danger', diff, diffRatio, message: 'Excel 原合计和网页重算合计差异很大，请检查合计列是否识别正确。' };
   if (absRatio >= 0.01) return { status: 'warning', diff, diffRatio, message: 'Excel 原合计和网页重算合计存在差异。' };

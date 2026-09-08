@@ -133,6 +133,13 @@ export function applyAccountsToSnapshots(snapshots: AssetSnapshot[], accounts: A
   }));
 }
 
+export function applyExchangeRateToSnapshots(snapshots: AssetSnapshot[], currency: string, rate: number): AssetSnapshot[] {
+  return snapshots.map((snapshot) => recalculateSnapshot({
+    ...snapshot,
+    exchangeRates: { ...snapshot.exchangeRates, [currency]: rate },
+  }));
+}
+
 export function buildEntry(accountName: string, amount: number | null, excelRatio: number | null, account?: AccountConfig): AccountEntry {
   const config = account ?? createAccountConfig(accountName);
   return {

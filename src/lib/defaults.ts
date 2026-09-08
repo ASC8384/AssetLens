@@ -16,8 +16,8 @@ export const categoryColors: Record<AssetCategory, string> = {
 
 export const defaultExchangeRates: Record<string, number> = {
   CNY: 1,
-  USD: 7.24,
-  HKD: 0.93,
+  USD: 7,
+  HKD: 0.9,
   JPY: 0.047,
 };
 

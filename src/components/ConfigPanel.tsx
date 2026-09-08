@@ -1,10 +1,34 @@
 import { useState } from 'react';
 import type { AccountConfig, AppData, AssetCategory } from '../lib/types';
-import { applyAccountsToSnapshots } from '../lib/calculations';
+import { applyAccountsToSnapshots, applyExchangeRateToSnapshots } from '../lib/calculations';
+import { applyHistoricalRates, collectForeignCurrencies } from '../lib/exchangeRates';
 import { categories } from '../lib/defaults';
 
 export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [rateLoading, setRateLoading] = useState(false);
+  const [rateStatus, setRateStatus] = useState<string | null>(null);
+  const foreignCurrencies = collectForeignCurrencies(data);
+
+  async function loadHistoricalRates() {
+    setRateLoading(true);
+    setRateStatus(null);
+    try {
+      const outcome = await applyHistoricalRates(data);
+      if (outcome.currencies.length === 0) {
+        setRateStatus('没有外币账户，无需获取历史汇率。');
+        return;
+      }
+      onChange(outcome.data);
+      const skipped = outcome.missingDates.length > 0 ? `，${outcome.missingDates.length} 期日期无法识别已跳过` : '';
+      setRateStatus(`已按快照日期更新 ${outcome.appliedCount} 期的 ${outcome.currencies.join('、')} 汇率${skipped}。`);
+    } catch (error) {
+      setRateStatus(`获取失败：${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setRateLoading(false);
+    }
+  }
+
   function updateAccount(id: string, patch: Partial<AccountConfig>) {
     const accounts = data.accounts.map((account) => account.id === id ? { ...account, ...patch } : account);
     onChange({ ...data, accounts, snapshots: applyAccountsToSnapshots(data.snapshots, accounts) });
@@ -13,7 +37,11 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
   function updateDefaultRate(currency: string, value: string) {
     const rate = Number(value);
     if (!Number.isFinite(rate)) return;
-    onChange({ ...data, defaultExchangeRates: { ...data.defaultExchangeRates, [currency]: rate } });
+    onChange({
+      ...data,
+      defaultExchangeRates: { ...data.defaultExchangeRates, [currency]: rate },
+      snapshots: applyExchangeRateToSnapshots(data.snapshots, currency, rate),
+    });
   }
 
   function addCurrency() {
@@ -74,7 +102,7 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
             <div className="section-header">
               <div>
                 <h2>全局默认汇率</h2>
-                <p>新增记录时使用；每期仍可单独修改。</p>
+                <p>导入与新增记录时使用；修改后所有历史快照会一起按新汇率重算。</p>
               </div>
               <button onClick={addCurrency}>新增币种</button>
             </div>
@@ -86,6 +114,24 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
                 </label>
               ))}
             </div>
+          </div>
+
+          <div className="historical-rate-card">
+            <div className="section-header">
+              <div>
+                <h2>历史汇率</h2>
+                <p>
+                  {foreignCurrencies.length > 0
+                    ? `按每期快照日期拉取 ${foreignCurrencies.join('、')} 的当日汇率，逐期折算，比统一用一个汇率更准确。`
+                    : '当前没有外币账户。把账户币种改成 USD、HKD 等之后即可按快照日期拉取当日汇率。'}
+                </p>
+              </div>
+              <button onClick={() => void loadHistoricalRates()} disabled={rateLoading || foreignCurrencies.length === 0}>
+                {rateLoading ? '获取中…' : '按快照日期获取'}
+              </button>
+            </div>
+            <p className="rate-source-note">数据来源：Frankfurter（欧洲央行公开汇率），免费且无需申请密钥。会覆盖各期现有汇率。</p>
+            {rateStatus && <p className="rate-status">{rateStatus}</p>}
           </div>
         </div>
       </div>}

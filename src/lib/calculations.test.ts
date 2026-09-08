@@ -79,6 +79,23 @@ describe('recalculateSnapshot', () => {
     expect(snapshot.entries[1].computedRatio).toBeCloseTo(3000 / 103000);
     expect(totalQuality(snapshot).status).toBe('ok');
   });
+
+  it('accepts an excel total that already nets out liabilities', () => {
+    const snapshot = recalculateSnapshot({
+      id: 's1',
+      date: '2026-05-01',
+      exchangeRates: { CNY: 1 },
+      computedTotalCny: 0,
+      excelTotal: 97000,
+      entries: [
+        { ...baseEntry, originalAmount: 100000 },
+        { ...baseEntry, accountId: 'visa', accountName: '信用卡Visa', category: '负债', originalAmount: 3000 },
+      ],
+    });
+
+    expect(snapshot.computedTotalCny).toBe(97000);
+    expect(totalQuality(snapshot)).toMatchObject({ status: 'ok', diff: 0 });
+  });
 });
 
 describe('dashboard helpers', () => {

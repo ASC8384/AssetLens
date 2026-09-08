@@ -155,6 +155,7 @@ code { color: var(--blue); }
 .manual-grid label { display: grid; gap: 6px; color: #475467; }
 .mapping-area { margin-top: 20px; }
 .preview-note { margin-top: 12px; color: var(--blue); font-weight: 800; }
+.fx-detected { margin: 0 0 14px; padding: 12px 14px; border-radius: 14px; background: rgba(5,150,105,.09); border: 1px solid rgba(5,150,105,.22); color: #065f46; font-weight: 700; }
 .quality-preview { display: grid; gap: 12px; margin-top: 16px; }
 .quality-summary { display: flex; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,.58); border: 1px solid var(--line); }
 .quality-summary span { color: var(--muted); }
@@ -265,6 +266,12 @@ th.sticky-col { background: #f4efe6; z-index: 3; }
 .rate-list label small { color: #8a6f54; font-size: 12px; }
 .rate-list input, .rate-editor input { width: 110px; }
 .rate-editor { display: grid; gap: 6px; }
+.historical-rate-card { margin-top: 18px; padding: 16px 18px; border-radius: 18px; background: rgba(34,102,255,.06); border: 1px solid rgba(34,102,255,.16); }
+.historical-rate-card .section-header { margin-bottom: 6px; }
+.historical-rate-card h2 { font-size: 17px; }
+.historical-rate-card p { margin: 0; }
+.rate-source-note { color: var(--muted); font-size: 12px; }
+.rate-status { margin-top: 10px !important; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.72); border: 1px solid var(--line); color: var(--navy); font-weight: 700; }
 .secondary-action { margin-top: 12px; }
 .warning-text { color: #c2410c; font-weight: 800; }
 .danger-text { color: #b91c1c; font-weight: 800; }

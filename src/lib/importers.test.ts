@@ -243,4 +243,91 @@ describe('spreadsheet column inference', () => {
     expect(byHeader['备注']).toMatchObject({ role: 'note' });
     expect(byHeader['结余']).toMatchObject({ role: 'ignore' });
   });
+
+  it('treats a column as foreign currency when the total formula scales it, even if it displays as CNY', () => {
+    const draft = importers.createImportDraft({
+      headers: ['时间', '港币账户A', '美元账户A', '人民币账户A', '合计'],
+      rows: [['2026-09-04', '¥2,000.00 ', '¥1,000.00 ', '¥500.00 ', '8300']],
+      columnRateHints: { 1: 0.9, 2: 7 },
+    });
+    const byHeader = Object.fromEntries(draft.mappings.map((mapping) => [mapping.header, mapping]));
+
+    expect(byHeader['港币账户A']).toMatchObject({ role: 'account', currency: 'HKD' });
+    expect(byHeader['美元账户A']).toMatchObject({ role: 'account', currency: 'USD' });
+    expect(byHeader['人民币账户A']).toMatchObject({ role: 'account', currency: 'CNY' });
+  });
+
+  it('still maps a hand-written approximate multiplier to the closest known currency', () => {
+    const draft = importers.createImportDraft({
+      headers: ['时间', '港币账户A', '美元账户A'],
+      rows: [['2026-09-04', '1000', '1000']],
+      columnRateHints: { 1: 0.88, 2: 6.8 },
+    });
+    const byHeader = Object.fromEntries(draft.mappings.map((mapping) => [mapping.header, mapping]));
+
+    expect(byHeader['港币账户A']).toMatchObject({ currency: 'HKD' });
+    expect(byHeader['美元账户A']).toMatchObject({ currency: 'USD' });
+  });
+
+  it('detects a foreign currency column whose first rows are blank', () => {
+    const draft = importers.createImportDraft({
+      headers: ['时间', '美元账户A'],
+      rows: [
+        ['2026-05-01', ''],
+        ['2026-06-01', ''],
+        ['2026-07-01', ''],
+        ['2026-08-01', '$1,000.00 '],
+      ],
+    });
+
+    expect(draft.mappings[1]).toMatchObject({ role: 'account', currency: 'USD' });
+    expect(draft.mappings[1].sampleValues).toEqual(['$1,000.00 ']);
+  });
+});
+
+describe('blank trailing rows', () => {
+  it('ignores rows that only carry a leftover total formula and no date', () => {
+    const draft = importers.createImportDraft({
+      headers: ['时间', '基金账户A', '合计'],
+      rows: [
+        ['2026-05-01', '100', '100'],
+        ['', '', '0'],
+        ['', '', '0'],
+      ],
+    });
+
+    const { snapshots } = importers.buildSnapshotsFromDraft(draft, []);
+
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0].date).toBe('2026-05-01');
+  });
+});
+
+describe('import applies mapping to existing accounts', () => {
+  it('updates the currency of an account that was previously imported as CNY', () => {
+    const existing = { ...createAccountConfig('美元账户A'), defaultCurrency: 'CNY' };
+    const draft = importers.createImportDraft({
+      headers: ['时间', '美元账户A'],
+      rows: [['2026-05-01', '100']],
+      columnRateHints: { 1: 7 },
+    });
+
+    const result = importers.buildSnapshotsFromDraft(draft, [existing], { CNY: 1, USD: 7 });
+
+    expect(result.accounts[0].defaultCurrency).toBe('USD');
+    expect(result.snapshots[0].entries[0]).toMatchObject({ currency: 'USD', exchangeRate: 7, amountCny: 700 });
+  });
+
+  it('uses the supplied exchange rates instead of the built-in defaults', () => {
+    const draft = importers.createImportDraft({
+      headers: ['时间', '美元账户A'],
+      rows: [['2026-05-01', '100']],
+      columnRateHints: { 1: 7 },
+    });
+
+    const result = importers.buildSnapshotsFromDraft(draft, [], { CNY: 1, USD: 6.5 });
+
+    expect(result.snapshots[0].exchangeRates.USD).toBe(6.5);
+    expect(result.snapshots[0].entries[0].amountCny).toBe(650);
+  });
 });
