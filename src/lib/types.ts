@@ -1,9 +1,18 @@
-export type AssetCategory = '基金' | '现金' | '证券' | '银行卡' | '杂项' | '负债';
+/**
+ * 大类按「流动性 + 波动」划分，而不是按产品或载体，这样风险占比和策略判断才有意义。
+ * 「未分类」是系统没认出来的状态，和「其他资产」这个真实类别刻意分开，
+ * 否则无法区分「我确认它是杂项」和「系统猜不出来」。
+ */
+export type AssetCategory = '纯现金' | '稳健类' | '权益类' | '其他资产' | '未分类' | '负债';
+
+/** 渠道是独立于风险的第二维度：同一渠道下可以有不同风险的资产。 */
+export type AccountVenue = '银行' | '场外' | '场内' | '其他';
 
 export type AccountConfig = {
   id: string;
   name: string;
   category: AssetCategory;
+  venue: AccountVenue;
   defaultCurrency: string;
   includedInTotal: boolean;
   hidden: boolean;
@@ -13,6 +22,7 @@ export type AccountEntry = {
   accountId: string;
   accountName: string;
   category: AssetCategory;
+  venue: AccountVenue;
   originalAmount: number | null;
   currency: string;
   exchangeRate: number | null;
@@ -74,6 +84,7 @@ export type FieldMapping = {
   accountName?: string;
   ratioForColumnIndex?: number;
   category?: AssetCategory;
+  venue?: AccountVenue;
   currency?: string;
   includedInTotal?: boolean;
   import: boolean;

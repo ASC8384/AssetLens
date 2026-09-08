@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountInsightSummary, accountRankingRows, analyzeDataHealth, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext } from './dashboard';
+import { accountInsightSummary, accountRankingRows, analyzeDataHealth, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext, unclassifiedSummary } from './dashboard';
 import { resolveExternalIncome } from './income';
 import { recalculateSnapshot } from './calculations';
 import type { AppData, AssetSnapshot } from './types';
@@ -15,7 +15,8 @@ function snapshot(date: string, fund: number, cash: number, excelTotal?: number,
       {
         accountId: 'fund',
         accountName: '基金账户',
-        category: '基金',
+        category: '权益类',
+        venue: '场外',
         originalAmount: fund,
         currency: 'CNY',
         exchangeRate: 1,
@@ -28,7 +29,8 @@ function snapshot(date: string, fund: number, cash: number, excelTotal?: number,
       {
         accountId: 'cash',
         accountName: '现金账户',
-        category: '现金',
+        category: '纯现金',
+        venue: '银行',
         originalAmount: cash,
         currency: 'CNY',
         exchangeRate: 1,
@@ -122,6 +124,37 @@ describe('analyzeDataHealth', () => {
   });
 });
 
+describe('unclassifiedSummary', () => {
+  it('reports unclassified accounts with their share of gross assets', () => {
+    const row = snapshot('2026-05-01', 100, 40);
+    row.entries[0] = { ...row.entries[0], category: '未分类' };
+
+    expect(unclassifiedSummary(row, [])).toMatchObject({
+      accountCount: 1,
+      amount: 100,
+      ratio: 100 / 140,
+      accountNames: ['基金账户'],
+    });
+  });
+
+  it('reports nothing once every account is classified', () => {
+    expect(unclassifiedSummary(snapshot('2026-05-01', 100, 40), [])).toMatchObject({ accountCount: 0, amount: 0 });
+  });
+
+  it('stops the data health card at unclassified accounts before suggesting a review', () => {
+    const row = snapshot('2026-05-01', 100, 40, 140);
+    row.entries[0] = { ...row.entries[0], category: '未分类' };
+    const result = analyzeDataHealth(appData([snapshot('2026-04-01', 90, 40, 130), row]), today);
+
+    expect(result).toMatchObject({
+      status: 'attention',
+      title: '有账户还没归类',
+      unclassifiedAccountCount: 1,
+    });
+    expect(result.message).toContain('71.43%');
+  });
+});
+
 describe('selectedSnapshotContext', () => {
   it('returns selected snapshot and previous snapshot for point-in-time dashboard', () => {
     const snapshots = [snapshot('2026-01-01', 100, 40), snapshot('2026-02-01', 120, 60), snapshot('2026-03-01', 160, 80)];
@@ -160,7 +193,8 @@ describe('accountInsightSummary', () => {
     selected.entries.push({
       accountId: 'new-bank',
       accountName: '新增银行卡',
-      category: '银行卡',
+      category: '稳健类',
+      venue: '银行',
       originalAmount: 20,
       currency: 'CNY',
       exchangeRate: 1,
@@ -193,7 +227,7 @@ describe('dashboardSummary', () => {
     };
 
     expect(dashboardSummary(data)).toMatchObject({
-      leaderCategory: '基金',
+      leaderCategory: '权益类',
       leaderAmount: 120,
       riskAssetRatio: 120 / 180,
     });
@@ -232,8 +266,8 @@ describe('dashboard chart helpers', () => {
     const selected = snapshot('2026-02-01', 120, 60);
 
     expect(categoryChangeRows(previous, selected)).toEqual(expect.arrayContaining([
-      { category: '基金', change: 20 },
-      { category: '现金', change: 20 },
+      { category: '权益类', change: 20 },
+      { category: '纯现金', change: 20 },
     ]));
   });
 });
@@ -251,8 +285,8 @@ describe('categoryTrendData', () => {
     };
 
     expect(categoryTrendData(data)).toEqual([
-      expect.objectContaining({ date: '2026-01-01', total: 140, 基金: 100, 现金: 40 }),
-      expect.objectContaining({ date: '2026-02-01', total: 180, 基金: 120, 现金: 60 }),
+      expect.objectContaining({ date: '2026-01-01', total: 140, 权益类: 100, 纯现金: 40 }),
+      expect.objectContaining({ date: '2026-02-01', total: 180, 权益类: 120, 纯现金: 60 }),
     ]);
   });
 });

@@ -10,9 +10,9 @@ function snapshot(): AssetSnapshot {
     exchangeRates: { CNY: 1 },
     computedTotalCny: 0,
     entries: [
-      { accountId: 'cash', accountName: '现金', category: '现金', originalAmount: 10000, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
-      { accountId: 'fund', accountName: '基金', category: '基金', originalAmount: 70000, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
-      { accountId: 'stock', accountName: '证券', category: '证券', originalAmount: 20000, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
+      { accountId: 'cash', accountName: '稳健池A', category: '稳健类', venue: '银行', originalAmount: 10000, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
+      { accountId: 'fund', accountName: '场外基金A', category: '权益类', venue: '场外', originalAmount: 70000, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
+      { accountId: 'stock', accountName: '券商账户A', category: '权益类', venue: '场内', originalAmount: 20000, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
     ],
   });
 }

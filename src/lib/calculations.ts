@@ -1,5 +1,5 @@
-import type { AccountConfig, AccountEntry, AppData, AssetCategory, AssetSnapshot } from './types';
-import { accountIdFromName, categories, createAccountConfig } from './defaults';
+import type { AccountConfig, AccountEntry, AccountVenue, AppData, AssetCategory, AssetSnapshot } from './types';
+import { accountIdFromName, categories, createAccountConfig, venues } from './defaults';
 
 type SnapshotInput = Omit<AssetSnapshot, 'computedGrossAssetsCny' | 'computedLiabilityCny' | 'computedTotalCny'> & {
   computedTotalCny?: number;
@@ -9,6 +9,16 @@ type SnapshotInput = Omit<AssetSnapshot, 'computedGrossAssetsCny' | 'computedLia
 
 export function isLiabilityCategory(category: AssetCategory): boolean {
   return category === '负债';
+}
+
+/** 风险资产只算权益类：稳健类虽有净值波动，但量级和股票不是一回事。 */
+export function riskAssetTotal(totals: Record<AssetCategory, number>): number {
+  return totals['权益类'];
+}
+
+/** 稳健池 = 纯现金 + 稳健类，用于应急备用金判断。 */
+export function stablePoolTotal(totals: Record<AssetCategory, number>): number {
+  return totals['纯现金'] + totals['稳健类'];
 }
 
 export function snapshotBookTotal(snapshot: Pick<AssetSnapshot, 'computedGrossAssetsCny' | 'computedLiabilityCny'>): number {
@@ -64,6 +74,7 @@ export function mergeAccounts(existing: AccountConfig[], snapshots: AssetSnapsho
           id: entry.accountId,
           name: entry.accountName,
           category: entry.category,
+          venue: entry.venue,
           defaultCurrency: entry.currency,
           includedInTotal: entry.includedInTotal,
           hidden: false,
@@ -82,6 +93,21 @@ export function categoryTotals(snapshot: AssetSnapshot | undefined, accounts: Ac
     const account = accountMap.get(entry.accountId);
     if (account?.hidden || !entry.includedInTotal || entry.amountCny === null) continue;
     totals[entry.category] += entry.amountCny;
+  }
+  return totals;
+}
+
+/** 渠道视图只看资产，负债按渠道分组没有意义。 */
+export function venueTotals(snapshot: AssetSnapshot | undefined, accounts: AccountConfig[]): Record<AccountVenue, number> {
+  const totals = Object.fromEntries(venues.map((venue) => [venue, 0])) as Record<AccountVenue, number>;
+  if (!snapshot) return totals;
+  const accountMap = new Map(accounts.map((account) => [account.id, account]));
+  for (const entry of snapshot.entries) {
+    const account = accountMap.get(entry.accountId);
+    if (account?.hidden || !entry.includedInTotal || entry.amountCny === null) continue;
+    if (isLiabilityCategory(entry.category)) continue;
+    const venue = account?.venue ?? entry.venue;
+    totals[venues.includes(venue) ? venue : '其他'] += entry.amountCny;
   }
   return totals;
 }
@@ -126,6 +152,7 @@ export function applyAccountsToSnapshots(snapshots: AssetSnapshot[], accounts: A
         ...entry,
         accountName: account.name,
         category: account.category,
+        venue: account.venue,
         currency: account.defaultCurrency,
         includedInTotal: account.includedInTotal,
       };
@@ -146,6 +173,7 @@ export function buildEntry(accountName: string, amount: number | null, excelRati
     accountId: config.id || accountIdFromName(accountName),
     accountName: config.name || accountName,
     category: config.category,
+    venue: config.venue,
     originalAmount: amount,
     currency: config.defaultCurrency,
     exchangeRate: config.defaultCurrency === 'CNY' ? 1 : null,

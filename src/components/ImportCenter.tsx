@@ -5,7 +5,7 @@ import { analyzeImportQuality, ignoreTotalColumns } from '../lib/importQuality';
 import { formatMoney, formatPercent } from '../lib/format';
 import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
 import type { AccountConfig, AppData, DuplicateDateMode, FieldMapping, ImportDraft } from '../lib/types';
-import { categories } from '../lib/defaults';
+import { categories, venues } from '../lib/defaults';
 
 type ManualSource = 'latest' | 'blank';
 
@@ -41,6 +41,7 @@ function manualAccounts(data: AppData): AccountConfig[] {
     id: entry.accountId,
     name: entry.accountName,
     category: entry.category,
+    venue: entry.venue,
     defaultCurrency: entry.currency,
     includedInTotal: entry.includedInTotal,
     hidden: false,
@@ -293,7 +294,8 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
                   <th>原始列名</th>
                   <th>识别类型</th>
                   <th>账户名</th>
-                  <th>分类</th>
+                  <th>大类</th>
+                  <th>渠道</th>
                   <th>币种</th>
                   <th>计入统计</th>
                   <th>示例值</th>
@@ -316,8 +318,13 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
                     </td>
                     <td><input value={mapping.accountName ?? ''} onChange={(event) => updateMapping(mapping.columnIndex, { accountName: event.target.value })} disabled={mapping.role !== 'account'} /></td>
                     <td>
-                      <select value={mapping.category ?? '杂项'} onChange={(event) => updateMapping(mapping.columnIndex, { category: event.target.value as FieldMapping['category'] })} disabled={mapping.role !== 'account'}>
+                      <select value={mapping.category ?? '未分类'} onChange={(event) => updateMapping(mapping.columnIndex, { category: event.target.value as FieldMapping['category'] })} disabled={mapping.role !== 'account'}>
                         {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      <select value={mapping.venue ?? '其他'} onChange={(event) => updateMapping(mapping.columnIndex, { venue: event.target.value as FieldMapping['venue'] })} disabled={mapping.role !== 'account'}>
+                        {venues.map((venue) => <option key={venue} value={venue}>{venue}</option>)}
                       </select>
                     </td>
                     <td><input value={mapping.currency ?? 'CNY'} onChange={(event) => updateMapping(mapping.columnIndex, { currency: event.target.value.toUpperCase() })} disabled={mapping.role !== 'account'} /></td>

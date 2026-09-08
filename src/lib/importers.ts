@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { accountIdFromName, categoryForAccount, createAccountConfig, defaultExchangeRates } from './defaults';
+import { accountIdFromName, categoryForAccount, createAccountConfig, defaultExchangeRates, venueForAccount } from './defaults';
 import { applyAccountsToSnapshots, buildEntry, mergeAccounts, recalculateSnapshot, sortSnapshots } from './calculations';
 import { parseNumber } from './format';
 import type { AccountConfig, AppData, AssetSnapshot, DuplicateDateMode, FieldMapping, ImportDraft, ParsedTable } from './types';
@@ -129,6 +129,7 @@ export function inferFieldMappings(parsed: ParsedTable): FieldMapping[] {
       role: 'account',
       accountName: normalized,
       category: categoryForAccount(normalized),
+      venue: venueForAccount(normalized),
       currency: inferCurrency(columnValues, parsed.columnRateHints?.[columnIndex]),
       includedInTotal: true,
       import: true,
@@ -194,6 +195,7 @@ export function buildSnapshotsFromDraft(
     accountMap.set(id, {
       ...(existing ?? createAccountConfig(name)),
       category: mapping.category ?? existing?.category ?? categoryForAccount(name),
+      venue: mapping.venue ?? existing?.venue ?? venueForAccount(name),
       defaultCurrency: mapping.currency ?? existing?.defaultCurrency ?? 'CNY',
       includedInTotal: mapping.includedInTotal ?? existing?.includedInTotal ?? true,
     });
@@ -268,6 +270,7 @@ function manualSnapshotAccounts(data: AppData, previous: AssetSnapshot | undefin
     id: entry.accountId,
     name: entry.accountName,
     category: entry.category,
+    venue: entry.venue,
     defaultCurrency: entry.currency,
     includedInTotal: entry.includedInTotal,
     hidden: false,

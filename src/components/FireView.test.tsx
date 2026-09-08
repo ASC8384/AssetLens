@@ -24,7 +24,7 @@ describe('FireView', () => {
     expect(screen.getByText('历史以来速度')).toBeTruthy();
     expect(screen.getAllByText('可信度').length).toBeGreaterThan(0);
     expect(screen.getByText(/2026-04-01 → 2026-05-01/)).toBeTruthy();
-    expect(screen.getAllByText('现金/银行卡可支撑月数').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('稳健池可支撑月数').length).toBeGreaterThan(0);
     expect(screen.getByText('预期年化收益率%')).toBeTruthy();
     expect(screen.queryByText('目标差距速览')).toBeNull();
     expect(screen.queryByText('估算边界')).toBeNull();

@@ -1,7 +1,8 @@
-import { categoryTotals, isLiabilityCategory, snapshotBookTotal } from './calculations';
-import { categories } from './defaults';
+import { categoryTotals, isLiabilityCategory, riskAssetTotal, snapshotBookTotal, stablePoolTotal } from './calculations';
+import { categories, isUnclassifiedCategory } from './defaults';
+import { formatPercent } from './format';
 import { resolveExternalIncome } from './income';
-import type { AppData, AssetCategory, AssetSnapshot } from './types';
+import type { AccountConfig, AppData, AssetCategory, AssetSnapshot } from './types';
 
 export type TotalQuality = {
   status: 'ok' | 'warning' | 'danger' | 'missing';
@@ -46,6 +47,7 @@ export type DataHealthAnalysis = {
   hasTotalIssue: boolean;
   hasNonCnyAssets: boolean;
   hasMissingExchangeRates: boolean;
+  unclassifiedAccountCount: number;
   action: DataHealthAction;
 };
 
@@ -57,6 +59,7 @@ export function analyzeDataHealth(data: AppData, today = new Date()): DataHealth
   const latestTime = latest ? new Date(`${latest.date}T00:00:00`).getTime() : NaN;
   const daysSinceLatest = latest && Number.isFinite(latestTime) ? Math.max(0, Math.floor((today.getTime() - latestTime) / 86400000)) : null;
   const hasTotalIssue = quality.status === 'danger' || quality.status === 'warning';
+  const unclassified = unclassifiedSummary(latest, data.accounts);
   const base = {
     latestDate: latest?.date ?? null,
     daysSinceLatest,
@@ -66,6 +69,7 @@ export function analyzeDataHealth(data: AppData, today = new Date()): DataHealth
     hasTotalIssue,
     hasNonCnyAssets,
     hasMissingExchangeRates,
+    unclassifiedAccountCount: unclassified.accountCount,
   };
 
   if (!latest) {
@@ -86,6 +90,17 @@ export function analyzeDataHealth(data: AppData, today = new Date()): DataHealth
       title: '数据需要检查',
       message: hasTotalIssue ? '发现合计差异，建议前往明细表检查异常。' : '发现非 CNY 资产汇率缺失，建议前往明细表检查。',
       action: { label: '去明细表检查', tab: 'details' },
+    };
+  }
+
+  // 未分类不算数据错误，但会让大类结构、风险占比和策略建议全部失真，所以同样要拦一下。
+  if (unclassified.accountCount > 0) {
+    return {
+      ...base,
+      status: 'attention',
+      title: '有账户还没归类',
+      message: `${unclassified.accountCount} 个账户仍是「未分类」，占总资产 ${formatPercent(unclassified.ratio)}，大类结构和风险占比会失真。`,
+      action: { label: '在「账户与汇率配置」里批量归类' },
     };
   }
 
@@ -156,6 +171,34 @@ export function accountInsightSummary(previous: AssetSnapshot | undefined, selec
   };
 }
 
+export type UnclassifiedSummary = {
+  accountCount: number;
+  amount: number;
+  ratio: number | null;
+  accountNames: string[];
+};
+
+/**
+ * 未分类账户会同时让饼图、风险占比和策略建议失真，所以要显式报出来，
+ * 而不是默默算进某个大类里让人误以为数据是对的。
+ */
+export function unclassifiedSummary(snapshot: AssetSnapshot | undefined, accounts: AccountConfig[]): UnclassifiedSummary {
+  if (!snapshot) return { accountCount: 0, amount: 0, ratio: null, accountNames: [] };
+  const accountMap = new Map(accounts.map((account) => [account.id, account]));
+  const rows = snapshot.entries.filter((entry) => {
+    if (accountMap.get(entry.accountId)?.hidden) return false;
+    return entry.includedInTotal && isUnclassifiedCategory(entry.category);
+  });
+  const amount = rows.reduce((sum, entry) => sum + (entry.amountCny ?? 0), 0);
+  const grossAssets = snapshot.computedGrossAssetsCny;
+  return {
+    accountCount: rows.length,
+    amount,
+    ratio: grossAssets === 0 ? null : amount / grossAssets,
+    accountNames: rows.map((entry) => entry.accountName),
+  };
+}
+
 export type DashboardSummary = {
   leaderCategory: AssetCategory | null;
   leaderAmount: number;
@@ -174,7 +217,7 @@ export function dashboardSummary(data: AppData): DashboardSummary {
     .filter((category) => !isLiabilityCategory(category))
     .map((category) => ({ category, amount: totals[category] }))
     .sort((a, b) => b.amount - a.amount)[0];
-  const riskAmount = totals['基金'] + totals['证券'];
+  const riskAmount = riskAssetTotal(totals);
   const grossAssets = latest.computedGrossAssetsCny;
   return {
     leaderCategory: leader?.category ?? null,
@@ -227,8 +270,8 @@ export function riskTrendData(data: AppData): Array<{ date: string; risk: number
     const totals = categoryTotals(snapshot, data.accounts);
     return {
       date: snapshot.date,
-      risk: totals['基金'] + totals['证券'],
-      safe: totals['现金'] + totals['银行卡'],
+      risk: riskAssetTotal(totals),
+      safe: stablePoolTotal(totals),
     };
   });
 }

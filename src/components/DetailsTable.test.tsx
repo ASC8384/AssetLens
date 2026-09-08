@@ -16,11 +16,11 @@ describe('DetailsTable', () => {
     const onChange = vi.fn();
 
     render(<DetailsTable data={data} onChange={onChange} />);
-    fireEvent.change(screen.getByLabelText('2026-05-01-基金账户A-币种'), { target: { value: 'USD' } });
+    fireEvent.change(screen.getByLabelText('2026-05-01-场外基金A-币种'), { target: { value: 'USD' } });
 
     const updatedData = onChange.mock.calls[0][0] as AppData;
     const latest = updatedData.snapshots[updatedData.snapshots.length - 1];
-    const entry = latest.entries.find((item) => item.accountName === '基金账户A');
+    const entry = latest.entries.find((item) => item.accountName === '场外基金A');
 
     expect(entry).toMatchObject({ currency: 'USD', exchangeRate: defaultExchangeRates.USD });
     expect(entry?.amountCny).toBeCloseTo(59000 * defaultExchangeRates.USD);
@@ -34,17 +34,17 @@ describe('DetailsTable', () => {
       snapshots: data.snapshots.map((snapshot) => snapshot.id === latest.id ? {
         ...snapshot,
         exchangeRates: { ...snapshot.exchangeRates, USD: 7.24 },
-        entries: snapshot.entries.map((entry) => entry.accountName === '基金账户A' ? { ...entry, currency: 'USD', exchangeRate: 7.24 } : entry),
+        entries: snapshot.entries.map((entry) => entry.accountName === '场外基金A' ? { ...entry, currency: 'USD', exchangeRate: 7.24 } : entry),
       } : snapshot),
     };
     const onChange = vi.fn();
 
     render(<DetailsTable data={usdData} onChange={onChange} />);
-    fireEvent.change(screen.getByLabelText('2026-05-01-基金账户A-汇率'), { target: { value: '7.5' } });
+    fireEvent.change(screen.getByLabelText('2026-05-01-场外基金A-汇率'), { target: { value: '7.5' } });
 
     const updatedData = onChange.mock.calls[0][0] as AppData;
     const updatedLatest = updatedData.snapshots[updatedData.snapshots.length - 1];
-    const entry = updatedLatest.entries.find((item) => item.accountName === '基金账户A');
+    const entry = updatedLatest.entries.find((item) => item.accountName === '场外基金A');
 
     expect(updatedLatest.exchangeRates.USD).toBe(7.5);
     expect(entry).toMatchObject({ currency: 'USD', exchangeRate: 7.5 });

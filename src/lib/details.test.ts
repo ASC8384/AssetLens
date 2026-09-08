@@ -13,8 +13,9 @@ function snapshot(date: string, amount: number, excelTotal?: number): AssetSnaps
     computedTotalCny: 0,
     entries: [{
       accountId: 'fund',
-      accountName: '基金账户A',
-      category: '基金',
+      accountName: '场外基金A',
+      category: '权益类',
+      venue: '场外',
       originalAmount: amount,
       currency: 'CNY',
       exchangeRate: 1,
@@ -29,10 +30,11 @@ function snapshot(date: string, amount: number, excelTotal?: number): AssetSnaps
 
 describe('details helpers', () => {
   it('filters accounts by category and search text', () => {
-    const accounts = [createAccountConfig('基金账户A'), createAccountConfig('现金账户B'), createAccountConfig('证券')];
+    const accounts = [createAccountConfig('券商账户A'), createAccountConfig('活期账户B'), createAccountConfig('债基账户C')];
 
-    expect(filterAccounts(accounts, '全部', '现金').map((account) => account.name)).toEqual(['现金账户B']);
-    expect(filterAccounts(accounts, '基金', '').map((account) => account.name)).toEqual(['基金账户A']);
+    expect(filterAccounts(accounts, '全部', '活期').map((account) => account.name)).toEqual(['活期账户B']);
+    expect(filterAccounts(accounts, '权益类', '').map((account) => account.name)).toEqual(['券商账户A']);
+    expect(filterAccounts(accounts, '稳健类', '').map((account) => account.name)).toEqual(['债基账户C']);
   });
 
   it('sorts snapshots by date, computed total and total diff', () => {

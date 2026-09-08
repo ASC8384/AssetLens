@@ -235,7 +235,9 @@ describe('spreadsheet column inference', () => {
     });
     const byHeader = Object.fromEntries(draft.mappings.map((mapping) => [mapping.header, mapping]));
 
-    expect(byHeader['工资卡A']).toMatchObject({ role: 'account', category: '杂项' });
+    // 「卡」只说明载体是银行，说不清里面是纯活期还是含理财，归稳健类是安全的一侧：
+    // 纯现金和稳健类在应急备用金里合并计算，猜错不影响指标，而猜成权益类会污染风险占比。
+    expect(byHeader['工资卡A']).toMatchObject({ role: 'account', category: '稳健类' });
     expect(byHeader['美元账户A']).toMatchObject({ role: 'account', currency: 'USD' });
     expect(byHeader['示例Visa']).toMatchObject({ role: 'account', category: '负债' });
     expect(byHeader['示例普卡']).toMatchObject({ role: 'account', category: '负债' });

@@ -1,5 +1,5 @@
 import type { AppData, AssetCategory, AssetSnapshot } from './types';
-import { accountChanges, categoryTotals } from './calculations';
+import { accountChanges, categoryTotals, riskAssetTotal } from './calculations';
 import { categories } from './defaults';
 import { formatMoney, formatPercent } from './format';
 import { analyzeStrategy } from './strategy';
@@ -97,8 +97,8 @@ export function buildStructuredReportSummary(data: AppData, startDate: string, e
   const contributionRows = accountContributionRows(first, last);
   const topIncreases = contributionRows.filter((row) => row.change > 0).slice(0, 3);
   const topDecreases = [...contributionRows].reverse().filter((row) => row.change < 0).slice(0, 3);
-  const startRiskRatio = first.computedGrossAssetsCny === 0 ? null : (startTotals['基金'] + startTotals['证券']) / first.computedGrossAssetsCny;
-  const endRiskRatio = last.computedGrossAssetsCny === 0 ? null : (endTotals['基金'] + endTotals['证券']) / last.computedGrossAssetsCny;
+  const startRiskRatio = first.computedGrossAssetsCny === 0 ? null : riskAssetTotal(startTotals) / first.computedGrossAssetsCny;
+  const endRiskRatio = last.computedGrossAssetsCny === 0 ? null : riskAssetTotal(endTotals) / last.computedGrossAssetsCny;
   const qualityMessages = dataQualityMessages(snapshots);
   const externalIncomeTotal = sumExternalIncome(snapshots);
 

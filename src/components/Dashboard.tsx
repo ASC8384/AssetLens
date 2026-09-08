@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { accountChanges, categoryTotals, totalChange } from '../lib/calculations';
-import { accountInsightSummary, accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext } from '../lib/dashboard';
-import { assetCategories, categories, categoryColors } from '../lib/defaults';
+import { accountChanges, categoryTotals, totalChange, venueTotals } from '../lib/calculations';
+import { accountInsightSummary, accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext, unclassifiedSummary } from '../lib/dashboard';
+import { assetCategories, categories, categoryColors, venueColors, venues } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
 import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
 import { analyzeStrategy } from '../lib/strategy';
@@ -20,6 +20,9 @@ export function Dashboard({ data }: { data: AppData }) {
   const change = totalChange(comparisonSnapshots);
   const totals = categoryTotals(selected, data.accounts);
   const categoryData = assetCategories.map((category) => ({ name: category, value: totals[category] })).filter((item) => item.value > 0);
+  const venueAmounts = venueTotals(selected, data.accounts);
+  const venueData = venues.map((venue) => ({ name: venue, value: venueAmounts[venue] })).filter((item) => item.value > 0);
+  const unclassified = unclassifiedSummary(selected, data.accounts);
   const trendData = categoryTrendData(data);
   const topChanges = accountChanges(comparisonSnapshots);
   const rankingRows = accountRankingRows(selected).slice(0, 8);
@@ -59,6 +62,17 @@ export function Dashboard({ data }: { data: AppData }) {
         </div>
       </div>
 
+      {unclassified.accountCount > 0 && (
+        <div className="quality-banner attention unclassified-banner">
+          <strong>{unclassified.accountCount} 个账户还没归类，占总资产 {formatPercent(unclassified.ratio)}</strong>
+          <span>
+            下面的大类结构、风险资产占比和策略建议都会因此失真。
+            展开「账户与汇率配置」勾选这些账户批量归类：{unclassified.accountNames.slice(0, 6).join('、')}
+            {unclassified.accountNames.length > 6 ? ` 等 ${unclassified.accountNames.length} 个` : ''}
+          </span>
+        </div>
+      )}
+
       <div className="dashboard-action-card chart-card">
         <div>
           <span className="eyebrow">MONTHLY REVIEW</span>
@@ -86,7 +100,7 @@ export function Dashboard({ data }: { data: AppData }) {
 
       <div className="insight-strip">
         <div><span>主导资产</span><strong>{summary.leaderCategory ?? '—'}</strong><small>{formatMoney(summary.leaderAmount)}</small></div>
-        <div><span>风险资产</span><strong>{formatPercent(summary.riskAssetRatio)}</strong><small>基金 + 证券 / 总资产</small></div>
+        <div><span>风险资产</span><strong>{formatPercent(summary.riskAssetRatio)}</strong><small>权益类 / 总资产</small></div>
         <div><span>负债</span><strong className={summary.liabilityAmount > 0 ? 'negative' : ''}>{formatMoney(summary.liabilityAmount)}</strong><small>信用卡等欠款</small></div>
         <div><span>选中时点</span><strong>{selected.date}</strong><small>{previous ? `对比 ${previous.date}` : '暂无前一期'}</small></div>
       </div>
@@ -161,7 +175,7 @@ export function Dashboard({ data }: { data: AppData }) {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="现金 vs 风险资产趋势">
+        <ChartCard title="稳健池 vs 权益类趋势">
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={riskRows}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -169,8 +183,8 @@ export function Dashboard({ data }: { data: AppData }) {
               <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
               <Tooltip formatter={(value) => formatMoney(Number(value))} />
               <Legend />
-              <Area type="monotone" dataKey="safe" name="现金/银行卡" fill="#12b8a6" stroke="#12b8a6" fillOpacity={0.16} />
-              <Line type="monotone" dataKey="risk" name="基金/证券" stroke="#d9822b" strokeWidth={3} dot={false} />
+              <Area type="monotone" dataKey="safe" name="纯现金 + 稳健类" fill="#12b8a6" stroke="#12b8a6" fillOpacity={0.16} />
+              <Line type="monotone" dataKey="risk" name="权益类" stroke="#d9822b" strokeWidth={3} dot={false} />
               <ReferenceLine x={selected.date} stroke="#d9822b" strokeDasharray="4 4" />
             </ComposedChart>
           </ResponsiveContainer>
@@ -240,6 +254,21 @@ export function Dashboard({ data }: { data: AppData }) {
               {assetCategories.map((category) => <Area key={category} type="monotone" dataKey={category} stackId="1" stroke={categoryColors[category]} fill={categoryColors[category]} />)}
             </AreaChart>
           </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title={`渠道结构 · ${selected.date}`} className="structure-card">
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={venueData} dataKey="value" nameKey="name" innerRadius={46} outerRadius={76} paddingAngle={4}>
+                {venueData.map((item) => <Cell key={item.name} fill={venueColors[item.name]} />)}
+              </Pie>
+              <Tooltip formatter={(value) => formatMoney(Number(value))} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="legend-list">
+            {venueData.map((item) => <span key={item.name}><i style={{ background: venueColors[item.name] }} />{item.name} {formatPercent(ratioBase === 0 ? null : item.value / ratioBase)}</span>)}
+          </div>
+          <p className="chart-note">渠道和风险大类是两条独立的维度：同一渠道里可以有不同风险的资产。</p>
         </ChartCard>
 
         <ChartCard title={`账户金额变化 Top 5 · ${comparisonLabel}`}>

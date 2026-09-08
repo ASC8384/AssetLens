@@ -1,4 +1,4 @@
-import { categoryTotals } from './calculations';
+import { categoryTotals, riskAssetTotal, stablePoolTotal } from './calculations';
 import { formatMoney, formatPercent } from './format';
 import type { AssetCategory, AssetSnapshot, StrategyConfig } from './types';
 
@@ -15,12 +15,13 @@ export function createDefaultStrategyConfig(): StrategyConfig {
     cashReserveTarget: 30000,
     riskAssetMinRatio: 0.35,
     riskAssetMaxRatio: 0.65,
+    // 纯现金默认为 0：多数人把活期、货基和债基混在一个稳健池里记，
+    // 等真的拆出纯现金账户再自行调整，避免一上来就报一个填不了的缺口。
     targetCategoryRatios: {
-      基金: 0.35,
-      证券: 0.2,
-      现金: 0.15,
-      银行卡: 0.25,
-      杂项: 0.05,
+      纯现金: 0,
+      稳健类: 0.4,
+      权益类: 0.5,
+      其他资产: 0.1,
       负债: 0,
     },
   };
@@ -28,8 +29,8 @@ export function createDefaultStrategyConfig(): StrategyConfig {
 
 export function analyzeStrategy(snapshot: AssetSnapshot, config: StrategyConfig): StrategyAnalysis {
   const totals = categoryTotals(snapshot, []);
-  const safeCash = totals['现金'] + totals['银行卡'];
-  const riskAmount = totals['基金'] + totals['证券'];
+  const safeCash = stablePoolTotal(totals);
+  const riskAmount = riskAssetTotal(totals);
   const grossAssets = snapshot.computedGrossAssetsCny;
   const riskAssetRatio = grossAssets === 0 ? null : riskAmount / grossAssets;
   const cashReserveGap = safeCash - config.cashReserveTarget;

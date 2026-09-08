@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { recalculateSnapshot } from './calculations';
+import { recalculateSnapshot, venueTotals } from './calculations';
 import { parseNumber } from './format';
 import { totalQuality } from './dashboard';
 import { createImportDraft, buildSnapshotsFromDraft, parsePastedTable } from './importers';
 
 const baseEntry = {
   accountId: 'fund',
-  accountName: '基金',
-  category: '基金' as const,
+  accountName: '场外基金A',
+  category: '权益类' as const,
+  venue: '场外' as const,
   originalAmount: 100,
   currency: 'CNY',
   exchangeRate: 1,
@@ -38,7 +39,7 @@ describe('recalculateSnapshot', () => {
       computedTotalCny: 0,
       entries: [
         baseEntry,
-        { ...baseEntry, accountId: 'cash', accountName: '现金', category: '现金', originalAmount: 100, excelRatio: 0.6 },
+        { ...baseEntry, accountId: 'cash', accountName: '活期账户A', category: '纯现金', originalAmount: 100, excelRatio: 0.6 },
       ],
     });
 
@@ -98,6 +99,37 @@ describe('recalculateSnapshot', () => {
   });
 });
 
+describe('venueTotals', () => {
+  it('groups assets by venue independently of their risk category and skips liabilities', () => {
+    const snapshot = recalculateSnapshot({
+      id: 's1',
+      date: '2026-05-01',
+      exchangeRates: { CNY: 1 },
+      computedTotalCny: 0,
+      entries: [
+        { ...baseEntry, accountId: 'otc-equity', category: '权益类', venue: '场外', originalAmount: 100 },
+        { ...baseEntry, accountId: 'otc-stable', category: '稳健类', venue: '场外', originalAmount: 200 },
+        { ...baseEntry, accountId: 'exchange', category: '权益类', venue: '场内', originalAmount: 300 },
+        { ...baseEntry, accountId: 'visa', category: '负债', venue: '银行', originalAmount: 50 },
+      ],
+    });
+
+    expect(venueTotals(snapshot, [])).toEqual({ 银行: 0, 场外: 300, 场内: 300, 其他: 0 });
+  });
+
+  it('falls back to 其他 for entries saved before the venue field existed', () => {
+    const snapshot = recalculateSnapshot({
+      id: 's1',
+      date: '2026-05-01',
+      exchangeRates: { CNY: 1 },
+      computedTotalCny: 0,
+      entries: [{ ...baseEntry, venue: undefined as unknown as '场外', originalAmount: 100 }],
+    });
+
+    expect(venueTotals(snapshot, [])['其他']).toBe(100);
+  });
+});
+
 describe('dashboard helpers', () => {
   it('flags likely wrong total column when excel total is far from computed total', () => {
     const snapshot = recalculateSnapshot({
@@ -108,7 +140,7 @@ describe('dashboard helpers', () => {
       excelTotal: 8500,
       entries: [
         { ...baseEntry, originalAmount: 48000, excelRatio: 0.2637 },
-        { ...baseEntry, accountId: 'cash', accountName: '现金账户A', category: '现金', originalAmount: 12000, excelRatio: 0.0659 },
+        { ...baseEntry, accountId: 'cash', accountName: '活期账户A', category: '纯现金', originalAmount: 12000, excelRatio: 0.0659 },
       ],
     });
 
@@ -135,7 +167,7 @@ describe('importers', () => {
 
   it('parses whitespace separated pasted tables from chat or plain text', () => {
     const input = `时间        基金账户A      占比    现金账户A      占比    现金账户B        占比    基金账户B        占比    基金账户C        占比    证券    占比    现金账户C
-        占比    杂      占比    基金账户D    占比    合计
+        占比    未知账户A      占比    基金账户D    占比    合计
     2025-11-01  48000   26.37%  12000   6.59%   4500    2.47%   22000   12.09%  18000   9.89%   35000   19.23%  6000    3.30%   12000   6.59%   3000    1.65%   8500
     2025-12-01  50500   26.93%  10500   5.60%   5200    2.77%   23000   12.27%  18500   9.87%   36500   19.47%  5500    2.93%   13000   6.93%   2800    1.49%   9000`;
 
@@ -143,11 +175,11 @@ describe('importers', () => {
     const draft = createImportDraft(parsed);
     const { snapshots } = buildSnapshotsFromDraft(draft, []);
 
-    expect(parsed.headers).toEqual(['时间', '基金账户A', '占比', '现金账户A', '占比', '现金账户B', '占比', '基金账户B', '占比', '基金账户C', '占比', '证券', '占比', '现金账户C', '占比', '杂', '占比', '基金账户D', '占比', '合计']);
+    expect(parsed.headers).toEqual(['时间', '基金账户A', '占比', '现金账户A', '占比', '现金账户B', '占比', '基金账户B', '占比', '基金账户C', '占比', '证券', '占比', '现金账户C', '占比', '未知账户A', '占比', '基金账户D', '占比', '合计']);
     expect(snapshots).toHaveLength(2);
     expect(snapshots[0].date).toBe('2025-11-01');
     expect(snapshots[0].entries).toHaveLength(9);
-    expect(snapshots[0].entries[7]).toMatchObject({ accountName: '杂', originalAmount: 12000, excelRatio: null });
+    expect(snapshots[0].entries[7]).toMatchObject({ accountName: '未知账户A', originalAmount: 12000, excelRatio: null });
     expect(snapshots[0].entries[8]).toMatchObject({ accountName: '基金账户D', originalAmount: 3000, excelRatio: null });
     expect(snapshots[0].excelTotal).toBe(8500);
   });

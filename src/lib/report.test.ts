@@ -10,8 +10,8 @@ function snapshot(date: string, fund: number, cash: number): AssetSnapshot {
     exchangeRates: { CNY: 1 },
     computedTotalCny: 0,
     entries: [
-      { accountId: 'fund', accountName: '基金', category: '基金', originalAmount: fund, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
-      { accountId: 'cash', accountName: '现金', category: '现金', originalAmount: cash, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
+      { accountId: 'fund', accountName: '场外基金A', category: '权益类', venue: '场外', originalAmount: fund, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
+      { accountId: 'cash', accountName: '活期账户A', category: '纯现金', venue: '银行', originalAmount: cash, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
     ],
   });
 }
@@ -25,7 +25,7 @@ const data: AppData = {
     cashReserveTarget: 100,
     riskAssetMinRatio: 0.2,
     riskAssetMaxRatio: 0.7,
-    targetCategoryRatios: { 基金: 0.4, 现金: 0.2 },
+    targetCategoryRatios: { 权益类: 0.4, 纯现金: 0.2 },
   },
   fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
   preferences: { activeTab: 'report', detailMode: 'compact', detailIssueFilter: 'all', categoryFilter: '全部' },
@@ -38,8 +38,8 @@ describe('report helpers', () => {
 
   it('computes account contribution rows', () => {
     expect(accountContributionRows(data.snapshots[0], data.snapshots[2])).toEqual([
-      { accountName: '基金', change: 60 },
-      { accountName: '现金', change: 40 },
+      { accountName: '场外基金A', change: 60 },
+      { accountName: '活期账户A', change: 40 },
     ]);
   });
 
@@ -57,13 +57,13 @@ describe('report helpers', () => {
       growth: 100 / 150,
     });
     expect(summary.topIncreases).toEqual([
-      { accountName: '基金', change: 60 },
-      { accountName: '现金', change: 40 },
+      { accountName: '场外基金A', change: 60 },
+      { accountName: '活期账户A', change: 40 },
     ]);
     expect(summary.topDecreases).toEqual([]);
     expect(summary.categoryChanges).toEqual(expect.arrayContaining([
-      { category: '基金', start: 100, end: 160, change: 60 },
-      { category: '现金', start: 50, end: 90, change: 40 },
+      { category: '权益类', start: 100, end: 160, change: 60 },
+      { category: '纯现金', start: 50, end: 90, change: 40 },
     ]));
     expect(summary.externalIncomeTotal).toBeNull();
     expect(summary.endLiability).toBe(0);

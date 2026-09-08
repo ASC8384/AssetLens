@@ -98,7 +98,7 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
             <div><span>本期外界收入{analysis.latestExternalIncomeLabel ? ` · ${analysis.latestExternalIncomeLabel}` : ''}</span><strong>{formatMoney(analysis.latestExternalIncome)}</strong></div>
             <div><span>年支出</span><strong>{formatMoney(analysis.annualExpense)}</strong></div>
             <div><span>历史净资产月均变化</span><strong>{formatMoney(analysis.monthlyGrowth)}</strong></div>
-            <div><span>现金/银行卡可支撑月数</span><strong>{analysis.emergencyReserveMonths === null ? '—' : `${formatNumber(analysis.emergencyReserveMonths, 1)} 个月`}</strong></div>
+            <div><span>稳健池可支撑月数</span><strong>{analysis.emergencyReserveMonths === null ? '—' : `${formatNumber(analysis.emergencyReserveMonths, 1)} 个月`}</strong></div>
           </div>
         </section>
 
@@ -111,7 +111,7 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
             <div><span>FIRE 投资资产目标</span><strong>{formatMoney(analysis.fireTarget)}</strong></div>
             <div><span>应急备用金目标</span><strong>{formatMoney(analysis.emergencyReserveTarget)}</strong></div>
             <div><span>应急备用金缺口</span><strong>{formatMoney(analysis.emergencyReserveGap)}</strong></div>
-            <div><span>现金/银行卡可支撑月数</span><strong>{analysis.emergencyReserveMonths === null ? '—' : `${formatNumber(analysis.emergencyReserveMonths, 1)} 个月`}</strong></div>
+            <div><span>稳健池可支撑月数</span><strong>{analysis.emergencyReserveMonths === null ? '—' : `${formatNumber(analysis.emergencyReserveMonths, 1)} 个月`}</strong></div>
           </div>
           <p className="muted">FIRE 目标按长期可投资资产估算；应急备用金单独检查。</p>
         </section>

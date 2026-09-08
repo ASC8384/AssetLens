@@ -1,4 +1,4 @@
-import { categoryTotals } from './calculations';
+import { categoryTotals, stablePoolTotal } from './calculations';
 import { externalIncomeDateLabel, resolveExternalIncome } from './income';
 import type { AssetSnapshot, FireConfig } from './types';
 
@@ -96,7 +96,7 @@ export function fireDecisionSummary(latest: AssetSnapshot | undefined, config: F
   const fireTarget = config.withdrawalRate > 0 ? annualExpense / config.withdrawalRate : 0;
   const fireGap = Math.max(0, fireTarget - currentNetWorth);
   const totals = latest ? categoryTotals(latest, []) : null;
-  const emergencyAssets = totals ? totals['现金'] + totals['银行卡'] : 0;
+  const emergencyAssets = totals ? stablePoolTotal(totals) : 0;
   const emergencyReserveTarget = config.monthlyExpense * config.emergencyReserveMonthsTarget;
   const matrix = fireSensitivityMatrix(config, currentNetWorth);
   const currentTarget = matrix.rows[1].cells.find((cell) => cell.isCurrent)?.target ?? fireTarget;
@@ -134,7 +134,7 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
   const fireGap = Math.max(0, fireTarget - currentNetWorth);
   const monthlyGrowth = averageMonthlyGrowth(snapshots);
   const totals = latest ? categoryTotals(latest, []) : null;
-  const emergencyAssets = totals ? totals['现金'] + totals['银行卡'] : 0;
+  const emergencyAssets = totals ? stablePoolTotal(totals) : 0;
   const emergencyReserveTarget = config.monthlyExpense * config.emergencyReserveMonthsTarget;
   const emergencyReserveGap = Math.max(0, emergencyReserveTarget - emergencyAssets);
   const latestIncome = resolveExternalIncome(snapshots, latest);

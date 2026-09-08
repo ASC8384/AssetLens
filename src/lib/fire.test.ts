@@ -10,9 +10,9 @@ function snapshot(date: string, total: number): AssetSnapshot {
     exchangeRates: { CNY: 1 },
     computedTotalCny: 0,
     entries: [
-      { accountId: 'cash', accountName: '现金', category: '现金', originalAmount: total * 0.2, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
-      { accountId: 'bank', accountName: '银行卡', category: '银行卡', originalAmount: total * 0.1, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
-      { accountId: 'fund', accountName: '基金', category: '基金', originalAmount: total * 0.7, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
+      { accountId: 'cash', accountName: '活期账户A', category: '纯现金', venue: '银行', originalAmount: total * 0.2, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
+      { accountId: 'bank', accountName: '银行理财A', category: '稳健类', venue: '银行', originalAmount: total * 0.1, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
+      { accountId: 'fund', accountName: '场外基金A', category: '权益类', venue: '场外', originalAmount: total * 0.7, currency: 'CNY', exchangeRate: 1, amountCny: null, excelRatio: null, computedRatio: null, ratioDiff: null, includedInTotal: true },
     ],
   });
 }

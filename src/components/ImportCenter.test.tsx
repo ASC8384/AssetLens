@@ -23,8 +23,8 @@ describe('ImportCenter manual snapshot flow', () => {
 
     expect(screen.getAllByText('手动新增一期')).toHaveLength(2);
     expect((screen.getByLabelText('日期') as HTMLInputElement).value).toBe('2026-05-20');
-    expect((screen.getByLabelText('基金账户A') as HTMLInputElement).value).toBe('59000');
-    expect((screen.getByLabelText('现金账户A') as HTMLInputElement).value).toBe('10000');
+    expect((screen.getByLabelText('场外基金A') as HTMLInputElement).value).toBe('59000');
+    expect((screen.getByLabelText('活期账户A') as HTMLInputElement).value).toBe('10000');
     expect((screen.getByLabelText('外界收入') as HTMLInputElement).value).toBe('12000');
     expect(screen.getByText(/沿用 2026-05-01/)).toBeTruthy();
   });
@@ -38,7 +38,7 @@ describe('ImportCenter manual snapshot flow', () => {
     fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.click(screen.getByText('开始手动输入'));
     fireEvent.change(screen.getByLabelText('日期'), { target: { value: '2026-05-15' } });
-    fireEvent.change(screen.getByLabelText('基金账户A'), { target: { value: '61000' } });
+    fireEvent.change(screen.getByLabelText('场外基金A'), { target: { value: '61000' } });
     fireEvent.change(screen.getByLabelText('外界收入'), { target: { value: '8000' } });
     fireEvent.change(screen.getByLabelText('备注'), { target: { value: '工资' } });
     fireEvent.click(screen.getByText('保存'));
@@ -49,8 +49,8 @@ describe('ImportCenter manual snapshot flow', () => {
     const amountByAccountName = new Map(latestSnapshot.entries.map((entry) => [entry.accountName, entry.originalAmount]));
 
     expect(latestSnapshot.date).toBe('2026-05-15');
-    expect(amountByAccountName.get('基金账户A')).toBe(61000);
-    expect(amountByAccountName.get('现金账户A')).toBe(10000);
+    expect(amountByAccountName.get('场外基金A')).toBe(61000);
+    expect(amountByAccountName.get('活期账户A')).toBe(10000);
     expect(latestSnapshot.externalIncome).toBe(8000);
     expect(latestSnapshot.note).toBe('工资');
   });
@@ -81,10 +81,10 @@ describe('ImportCenter manual snapshot flow', () => {
 
     fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.click(screen.getByText('开始手动输入'));
-    expect((screen.getByLabelText('基金账户A') as HTMLInputElement).value).toBe('59000');
+    expect((screen.getByLabelText('场外基金A') as HTMLInputElement).value).toBe('59000');
 
     fireEvent.change(screen.getByLabelText('复制来源'), { target: { value: 'blank' } });
-    expect((screen.getByLabelText('基金账户A') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('场外基金A') as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText('外界收入') as HTMLInputElement).value).toBe('');
   });
 

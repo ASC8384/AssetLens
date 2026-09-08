@@ -13,8 +13,9 @@ function snapshot(id: string, date: string, amount: number): AssetSnapshot {
     computedTotalCny: 0,
     entries: [{
       accountId: 'fund',
-      accountName: '基金账户A',
-      category: '基金',
+      accountName: '场外基金A',
+      category: '权益类',
+      venue: '场外',
       originalAmount: amount,
       currency: 'CNY',
       exchangeRate: 1,

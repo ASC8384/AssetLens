@@ -34,6 +34,7 @@ export function DataHealthCard({ data, onNavigate }: { data: AppData; onNavigate
       <div className="data-health-chips">
         <span className={`data-health-chip ${analysis.hasTotalIssue ? 'attention' : ''}`}>{analysis.hasTotalIssue ? '合计差异待查' : '合计检查正常'}</span>
         <span className={`data-health-chip ${analysis.hasMissingExchangeRates ? 'attention' : ''}`}>{analysis.hasMissingExchangeRates ? '汇率缺失待查' : '汇率检查正常'}</span>
+        <span className={`data-health-chip ${analysis.unclassifiedAccountCount > 0 ? 'attention' : ''}`}>{analysis.unclassifiedAccountCount > 0 ? `${analysis.unclassifiedAccountCount} 个账户待归类` : '账户已全部归类'}</span>
       </div>
       <div className="data-health-center">
         <div><strong>数据健康中心</strong><small>合计差异 · 汇率缺失 · 重复日期 · 空金额 · 快照更新节奏</small></div>
