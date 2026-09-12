@@ -1,21 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AccountConfig, AccountVenue, AppData, AssetCategory } from '../lib/types';
 import { applyAccountsToSnapshots, applyExchangeRateToSnapshots } from '../lib/calculations';
 import { applyHistoricalRates, collectForeignCurrencies } from '../lib/exchangeRates';
 import { categories, categoryHints, isUnclassifiedCategory, venues } from '../lib/defaults';
 
 export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
-  const [expanded, setExpanded] = useState(false);
   const [rateLoading, setRateLoading] = useState(false);
   const [rateStatus, setRateStatus] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [onlyUnclassified, setOnlyUnclassified] = useState(false);
   const foreignCurrencies = collectForeignCurrencies(data);
   const unclassifiedCount = data.accounts.filter((account) => isUnclassifiedCategory(account.category)).length;
-  const visibleAccounts = onlyUnclassified ? data.accounts.filter((account) => isUnclassifiedCategory(account.category)) : data.accounts;
+  const filteringUnclassified = onlyUnclassified && unclassifiedCount > 0;
+  const visibleAccounts = filteringUnclassified ? data.accounts.filter((account) => isUnclassifiedCategory(account.category)) : data.accounts;
   const selectedSet = new Set(selectedIds);
   const visibleSelectedCount = visibleAccounts.filter((account) => selectedSet.has(account.id)).length;
   const allVisibleSelected = visibleAccounts.length > 0 && visibleSelectedCount === visibleAccounts.length;
+
+  useEffect(() => {
+    if (onlyUnclassified && unclassifiedCount === 0) setOnlyUnclassified(false);
+  }, [onlyUnclassified, unclassifiedCount]);
 
   async function loadHistoricalRates() {
     setRateLoading(true);
@@ -71,24 +75,16 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
   }
 
   return (
-    <section className="panel config-panel">
-      <div className="section-header compact-section-header">
-        <div>
-          <h2>账户与汇率配置</h2>
-          <p>{data.accounts.length} 个账户 · {Object.keys(data.defaultExchangeRates).length} 个默认币种{unclassifiedCount > 0 ? ` · ${unclassifiedCount} 个待归类` : ''}</p>
-        </div>
-        <button onClick={() => setExpanded(!expanded)}>{expanded ? '收起配置' : '展开配置'}</button>
-      </div>
-      {expanded && <div className="config-grid">
+    <div className="config-grid">
         <div>
           <div className="section-header">
             <div>
               <h2>账户配置</h2>
               <p>大类按流动性和波动划分，渠道是独立的第二维度。负债请填欠款正数，会从净资产中扣除。</p>
             </div>
-            {unclassifiedCount > 0 && (
-              <button className={onlyUnclassified ? 'primary' : ''} onClick={() => setOnlyUnclassified(!onlyUnclassified)}>
-                {onlyUnclassified ? '显示全部账户' : `只看未分类（${unclassifiedCount}）`}
+            {(unclassifiedCount > 0 || onlyUnclassified) && (
+              <button className={filteringUnclassified ? 'primary' : ''} onClick={() => setOnlyUnclassified(!onlyUnclassified)}>
+                {filteringUnclassified ? '显示全部账户' : `只看未分类（${unclassifiedCount}）`}
               </button>
             )}
           </div>
@@ -185,7 +181,6 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
             {rateStatus && <p className="rate-status">{rateStatus}</p>}
           </div>
         </div>
-      </div>}
-    </section>
+    </div>
   );
 }

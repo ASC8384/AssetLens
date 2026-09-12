@@ -6,11 +6,14 @@ import { createSampleData } from '../lib/sampleData';
 
 describe('DataHealthCard', () => {
   it('renders empty data guidance', () => {
-    render(<DataHealthCard data={createEmptyAppData()} />);
+    const onOpenPanel = vi.fn();
+    render(<DataHealthCard data={createEmptyAppData()} onOpenPanel={onOpenPanel} />);
 
     expect(screen.getByText('还没有数据')).toBeTruthy();
     expect(screen.getByText('还没有数据：先导入 Excel 或载入示例数据。')).toBeTruthy();
-    expect(screen.getByText('展开导入区开始导入')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '展开导入区开始导入' }));
+
+    expect(onOpenPanel).toHaveBeenCalledWith('import');
   });
 
   it('renders data metrics and navigates to report for healthy data', () => {

@@ -69,7 +69,7 @@ describe('analyzeDataHealth', () => {
       latestDate: null,
       daysSinceLatest: null,
       snapshotCount: 0,
-      action: { label: '展开导入区开始导入' },
+      action: { label: '展开导入区开始导入', panel: 'import' },
     });
   });
 
@@ -82,6 +82,7 @@ describe('analyzeDataHealth', () => {
       latestDate: '2026-05-01',
       daysSinceLatest: 20,
       snapshotCount: 1,
+      action: { label: '继续导入下一期', panel: 'import' },
     });
   });
 
@@ -150,6 +151,7 @@ describe('unclassifiedSummary', () => {
       status: 'attention',
       title: '有账户还没归类',
       unclassifiedAccountCount: 1,
+      action: { label: '在「账户与汇率配置」里批量归类', panel: 'config' },
     });
     expect(result.message).toContain('71.43%');
   });

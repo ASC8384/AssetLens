@@ -2,7 +2,7 @@ import { categoryTotals, isLiabilityCategory, riskAssetTotal, snapshotBookTotal,
 import { categories, isUnclassifiedCategory } from './defaults';
 import { formatPercent } from './format';
 import { resolveExternalIncome } from './income';
-import type { AccountConfig, AppData, AssetCategory, AssetSnapshot } from './types';
+import type { AccountConfig, AppData, AssetCategory, AssetSnapshot, ConsolePanelId } from './types';
 
 export type TotalQuality = {
   status: 'ok' | 'warning' | 'danger' | 'missing';
@@ -33,6 +33,7 @@ export type DataHealthStatus = 'empty' | 'single' | 'attention' | 'ok';
 export type DataHealthAction = {
   label: string;
   tab?: AppData['preferences']['activeTab'];
+  panel?: ConsolePanelId;
 };
 
 export type DataHealthAnalysis = {
@@ -79,7 +80,7 @@ export function analyzeDataHealth(data: AppData, today = new Date()): DataHealth
       title: '还没有数据',
       message: '还没有数据：先导入 Excel 或载入示例数据。',
       hasTotalIssue: false,
-      action: { label: '展开导入区开始导入' },
+      action: { label: '展开导入区开始导入', panel: 'import' },
     };
   }
 
@@ -100,7 +101,7 @@ export function analyzeDataHealth(data: AppData, today = new Date()): DataHealth
       status: 'attention',
       title: '有账户还没归类',
       message: `${unclassified.accountCount} 个账户仍是「未分类」，占总资产 ${formatPercent(unclassified.ratio)}，大类结构和风险占比会失真。`,
-      action: { label: '在「账户与汇率配置」里批量归类' },
+      action: { label: '在「账户与汇率配置」里批量归类', panel: 'config' },
     };
   }
 
@@ -110,7 +111,7 @@ export function analyzeDataHealth(data: AppData, today = new Date()): DataHealth
       status: 'single',
       title: '已有一期快照',
       message: '已有数据但只有一期：再导入一期后即可查看趋势。',
-      action: { label: '继续导入下一期' },
+      action: { label: '继续导入下一期', panel: 'import' },
     };
   }
 

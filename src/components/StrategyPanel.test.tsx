@@ -1,16 +1,33 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { StrategyPanel } from './StrategyPanel';
 import { createEmptyAppData } from '../lib/defaults';
+import type { AppData } from '../lib/types';
 
 describe('StrategyPanel', () => {
-  it('shows strategy as a standalone configuration entry', () => {
+  it('exposes target parameters for cash reserve, risk bounds and category ratios', () => {
     render(<StrategyPanel data={createEmptyAppData()} onChange={vi.fn()} />);
 
-    expect(screen.getByRole('heading', { name: '资产策略' })).toBeTruthy();
-    expect(screen.getByText('可自定义目标参数，影响仪表盘策略雷达和复盘报告。')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '展开策略' })).toBeTruthy();
-    expect(screen.getByText('资产结构目标看板')).toBeTruthy();
-    expect(screen.getByText('风险资产目标区间')).toBeTruthy();
+    expect(screen.getByText(/应急备用金目标/)).toBeTruthy();
+    expect(screen.getByText(/风险资产下限%/)).toBeTruthy();
+    expect(screen.getByText(/风险资产上限%/)).toBeTruthy();
+    expect(screen.getByText(/纯现金目标占比%/)).toBeTruthy();
+    expect(screen.getByText(/稳健类目标占比%/)).toBeTruthy();
+    expect(screen.getByText(/权益类目标占比%/)).toBeTruthy();
+    expect(screen.getByText(/其他资产目标占比%/)).toBeTruthy();
+    expect(screen.getByText(/负债目标占比%/)).toBeTruthy();
+    expect((screen.getByDisplayValue('30000') as HTMLInputElement).value).toBe('30000');
+    expect(screen.getByDisplayValue('35')).toBeTruthy();
+    expect(screen.getByDisplayValue('65')).toBeTruthy();
+  });
+
+  it('saves a risk-asset bound as a ratio', () => {
+    const onChange = vi.fn();
+    render(<StrategyPanel data={createEmptyAppData()} onChange={onChange} />);
+
+    fireEvent.change(screen.getByDisplayValue('35'), { target: { value: '40' } });
+
+    const next = onChange.mock.calls[0][0] as AppData;
+    expect(next.strategy.riskAssetMinRatio).toBe(0.4);
   });
 });

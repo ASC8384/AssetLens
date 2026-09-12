@@ -30,3 +30,18 @@ describe('dashboard layout css', () => {
     expect(css).not.toContain('.tertiary-charts { grid-template-columns: repeat(4, minmax(0, 1fr)); }');
   });
 });
+
+describe('control console css', () => {
+  it('keeps three equal-height entry cards and a full-width expand body', () => {
+    const css = readFileSync('src/styles.css', 'utf8');
+
+    expect(css).toContain('.console-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: stretch; }');
+    expect(css).toContain('.console-card-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }');
+    expect(css).toContain('.console-card button { white-space: nowrap; flex-shrink: 0; }');
+    expect(css).toContain('.console-body[hidden] { display: none; }');
+    expect(css).toContain('.control-console .console-card { margin-top: 0; }');
+    expect(css).not.toContain('.control-strip');
+    expect(css).not.toContain('.three-column-controls');
+    expect(css).not.toContain('.strategy-target-board');
+  });
+});

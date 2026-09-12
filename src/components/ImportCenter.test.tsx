@@ -18,7 +18,6 @@ describe('ImportCenter manual snapshot flow', () => {
   it('shows manual input form with defaults from the latest snapshot', () => {
     render(<ImportCenter data={createSampleData()} onChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.click(screen.getByText('开始手动输入'));
 
     expect(screen.getAllByText('手动新增一期')).toHaveLength(2);
@@ -35,7 +34,6 @@ describe('ImportCenter manual snapshot flow', () => {
 
     render(<ImportCenter data={data} onChange={onChange} />);
 
-    fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.click(screen.getByText('开始手动输入'));
     fireEvent.change(screen.getByLabelText('日期'), { target: { value: '2026-05-15' } });
     fireEvent.change(screen.getByLabelText('场外基金A'), { target: { value: '61000' } });
@@ -59,7 +57,6 @@ describe('ImportCenter manual snapshot flow', () => {
     const onChange = vi.fn();
     render(<ImportCenter data={createSampleData()} onChange={onChange} />);
 
-    fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.click(screen.getByText('开始手动输入'));
     fireEvent.change(screen.getByLabelText('日期'), { target: { value: '' } });
     fireEvent.click(screen.getByText('保存'));
@@ -79,7 +76,6 @@ describe('ImportCenter manual snapshot flow', () => {
   it('switches manual source between latest snapshot and blank amounts', () => {
     render(<ImportCenter data={createSampleData()} onChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.click(screen.getByText('开始手动输入'));
     expect((screen.getByLabelText('场外基金A') as HTMLInputElement).value).toBe('59000');
 
@@ -92,7 +88,6 @@ describe('ImportCenter manual snapshot flow', () => {
     const onManualSnapshotCreated = vi.fn();
     render(<ImportCenter data={createSampleData()} onChange={vi.fn()} onManualSnapshotCreated={onManualSnapshotCreated} />);
 
-    fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.click(screen.getByText('开始手动输入'));
     fireEvent.click(screen.getByText('保存'));
 
@@ -102,7 +97,6 @@ describe('ImportCenter manual snapshot flow', () => {
   it('shows a prompt instead of the full form when there are no accounts to fill', () => {
     render(<ImportCenter data={createEmptyAppData()} onChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.click(screen.getByText('开始手动输入'));
 
     expect(screen.getByText('请先导入一次数据，或先到明细表新增账户。')).toBeTruthy();
@@ -113,9 +107,8 @@ describe('ImportCenter manual snapshot flow', () => {
   it('keeps manual form and import draft mutually exclusive', () => {
     render(<ImportCenter data={createSampleData()} onChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.click(screen.getByText('开始手动输入'));
-    fireEvent.change(screen.getByLabelText('粘贴表格文本'), {
+        fireEvent.change(screen.getByLabelText('粘贴表格文本'), {
       target: {
         value: '时间\t基金账户A\n2026-05-02\t60000',
       },
@@ -132,7 +125,6 @@ describe('ImportCenter manual snapshot flow', () => {
 
     render(<ImportCenter data={createEmptyAppData()} onChange={vi.fn()} onImportComplete={onImportComplete} />);
 
-    fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.change(screen.getByLabelText('粘贴表格文本'), {
       target: {
         value: '时间\t基金账户A\t现金账户A\t合计\n2026-05-01\t60000\t10000\t70000',
@@ -155,7 +147,6 @@ describe('ImportCenter manual snapshot flow', () => {
 
     render(<ImportCenter data={createEmptyAppData()} onChange={vi.fn()} onImportComplete={onImportComplete} />);
 
-    fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.change(screen.getByLabelText('粘贴表格文本'), {
       target: {
         value: '时间\t基金账户A\t现金账户A\t合计\n2026-05-01\t60000\t10000\t10000',
@@ -175,7 +166,6 @@ describe('ImportCenter manual snapshot flow', () => {
   it('recognizes liability and income columns in the mapping table', () => {
     render(<ImportCenter data={createEmptyAppData()} onChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByText('展开导入区'));
     fireEvent.change(screen.getByLabelText('粘贴表格文本'), {
       target: {
         value: '时间\t基金账户A\t信用卡Visa\t收入\t备注\n2026-09-04\t10000\t500\t3000\t示例备注',

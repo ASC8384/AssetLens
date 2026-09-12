@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ConfigPanel } from './components/ConfigPanel';
+import { ControlConsole, type ConsolePanelId } from './components/ControlConsole';
 import { Dashboard } from './components/Dashboard';
 import { DataHealthCard } from './components/DataHealthCard';
 import { DetailsTable } from './components/DetailsTable';
@@ -17,6 +18,7 @@ export default function App() {
   const [data, setData] = useState<AppData>(() => loadAppData());
   const [notice, setNotice] = useState('');
   const [manualInputRequest, setManualInputRequest] = useState(0);
+  const [activePanel, setActivePanel] = useState<ConsolePanelId | null>(null);
   const noticeTimerRef = useRef<number | null>(null);
   const activeTab = data.preferences.activeTab;
 
@@ -43,6 +45,7 @@ export default function App() {
   }
 
   function handleImportComplete(completion: ImportCompletion) {
+    setActivePanel(null);
     if (completion.dangerCount > 0) {
       updateData({ ...completion.data, preferences: { ...completion.data.preferences, activeTab: 'details', detailMode: 'analysis', detailIssueFilter: 'issues-only' } }, `已导入 ${completion.snapshotCount} 期、${completion.accountCount} 个账户；发现 ${completion.dangerCount} 个严重异常，请在明细表检查。`);
       return;
@@ -57,7 +60,10 @@ export default function App() {
   return (
     <div className="app-shell">
       {notice && <div className="toast">{notice}</div>}
-      <TopBar data={data} onChange={updateData} onManualInputRequest={() => setManualInputRequest((value) => value + 1)} />
+      <TopBar data={data} onChange={updateData} onManualInputRequest={() => {
+        setActivePanel('import');
+        setManualInputRequest((value) => value + 1);
+      }} />
       {data.snapshots.length === 0 && (
         <section className="onboarding panel">
           <div><span className="eyebrow">GET STARTED</span><h2>三步开始分析资产</h2></div>
@@ -66,13 +72,18 @@ export default function App() {
         </section>
       )}
 
-      <DataHealthCard data={data} onNavigate={setActiveTab} />
+      <DataHealthCard data={data} onNavigate={setActiveTab} onOpenPanel={setActivePanel} />
 
-      <div className="control-strip three-column-controls">
-        <ImportCenter data={data} onChange={updateData} onImportComplete={handleImportComplete} manualInputRequest={manualInputRequest} onManualSnapshotCreated={(next) => updateData({ ...next, preferences: { ...next.preferences, activeTab: 'details' } }, '已新增一期记录，可在明细表继续编辑。')} />
-        <StrategyPanel data={data} onChange={updateData} />
-        <ConfigPanel data={data} onChange={updateData} />
-      </div>
+      <ControlConsole data={data} activePanel={activePanel} onActivePanelChange={setActivePanel}>
+        {{
+          import: <ImportCenter data={data} onChange={updateData} onImportComplete={handleImportComplete} manualInputRequest={manualInputRequest} onManualSnapshotCreated={(next) => {
+            setActivePanel(null);
+            updateData({ ...next, preferences: { ...next.preferences, activeTab: 'details' } }, '已新增一期记录，可在明细表继续编辑。');
+          }} />,
+          strategy: <StrategyPanel data={data} onChange={updateData} />,
+          config: <ConfigPanel data={data} onChange={updateData} />,
+        }}
+      </ControlConsole>
 
       <nav className="tabs">
         <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>仪表盘</button>

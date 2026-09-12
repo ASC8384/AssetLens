@@ -1,5 +1,5 @@
 import { analyzeDataHealth } from '../lib/dashboard';
-import type { AppData } from '../lib/types';
+import type { AppData, ConsolePanelId } from '../lib/types';
 
 function totalQualityLabel(status: ReturnType<typeof analyzeDataHealth>['totalQualityStatus']): string {
   if (status === 'danger') return '合计差异严重';
@@ -8,9 +8,10 @@ function totalQualityLabel(status: ReturnType<typeof analyzeDataHealth>['totalQu
   return '无原合计';
 }
 
-export function DataHealthCard({ data, onNavigate }: { data: AppData; onNavigate?: (tab: AppData['preferences']['activeTab']) => void }) {
+export function DataHealthCard({ data, onNavigate, onOpenPanel }: { data: AppData; onNavigate?: (tab: AppData['preferences']['activeTab']) => void; onOpenPanel?: (panel: ConsolePanelId) => void }) {
   const analysis = analyzeDataHealth(data);
   const actionTab = analysis.action.tab;
+  const actionPanel = analysis.action.panel;
 
   return (
     <section className={`panel data-health-card ${analysis.status}`}>
@@ -22,6 +23,8 @@ export function DataHealthCard({ data, onNavigate }: { data: AppData; onNavigate
         </div>
         {actionTab ? (
           <button className="primary" onClick={() => onNavigate?.(actionTab)}>{analysis.action.label}</button>
+        ) : actionPanel ? (
+          <button className="primary" onClick={() => onOpenPanel?.(actionPanel)}>{analysis.action.label}</button>
         ) : (
           <span className="data-health-action">{analysis.action.label}</span>
         )}

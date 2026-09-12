@@ -68,7 +68,6 @@ function createManualDraft(data: AppData, accounts: AccountConfig[], source: Man
 }
 
 export function ImportCenter({ data, onChange, onImportComplete, manualInputRequest = 0, onManualSnapshotCreated }: { data: AppData; onChange: (data: AppData, message?: string) => void; onImportComplete?: (completion: ImportCompletion) => void; manualInputRequest?: number; onManualSnapshotCreated?: (data: AppData) => void }) {
-  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState<ImportDraft | null>(null);
   const [manualDraft, setManualDraft] = useState<ManualDraft | null>(null);
   const [pasteText, setPasteText] = useState('');
@@ -83,7 +82,6 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
 
   useEffect(() => {
     if (manualInputRequest <= 0) return;
-    setExpanded(true);
     setDraft(null);
     setDuplicateMode('overwrite');
     setManualDraft(createManualDraft(data, manualAccountList));
@@ -171,16 +169,7 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
   }
 
   return (
-    <section className="panel import-center">
-      <div className="section-header compact-section-header">
-        <div>
-          <h2>导入数据</h2>
-          <p>默认只导入金额列；<code>占比</code> 列会自动忽略，用网页重算占比。</p>
-        </div>
-        <button onClick={() => setExpanded(!expanded)}>{expanded || draft || manualDraft ? '收起导入区' : '展开导入区'}</button>
-      </div>
-
-      {(expanded || draft || manualDraft) && <>
+    <div className="import-center">
       <div className="help-card">
         <h3>导入格式说明</h3>
         <ul>
@@ -365,7 +354,6 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
           )}
         </div>
       )}
-      </>}
-    </section>
+    </div>
   );
 }

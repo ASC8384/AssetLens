@@ -60,6 +60,8 @@ export type FireConfig = {
   expectedAnnualReturn: number;
 };
 
+export type ConsolePanelId = 'import' | 'strategy' | 'config';
+
 export type AppData = {
   version: 1;
   snapshots: AssetSnapshot[];
