@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
 import { applyAccountsToSnapshots, buildEntry, isLiabilityCategory, recalculateSnapshot, sortSnapshots } from '../lib/calculations';
 import { accountIdFromName, categories, createAccountConfig } from '../lib/defaults';
+import { isIsoDate, todayString } from '../lib/dates';
 import { filterAccounts, filterSnapshotsByIssue, sortSnapshotsForDetails, type DetailIssueFilter, type DetailSortMode } from '../lib/details';
 import { downloadText, formatMoney, parseNumber } from '../lib/format';
 import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
+import { applySnapshotDateChange, duplicateSnapshotWithDate, snapshotsOnDate } from '../lib/snapshotDates';
 import type { AccountConfig, AppData, AssetCategory, AssetSnapshot } from '../lib/types';
+import { SnapshotDateDialog } from './SnapshotDateDialog';
 
 export function DetailsTable({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
   const mode = data.preferences.detailMode;
@@ -12,6 +15,7 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
   const categoryFilter = data.preferences.categoryFilter;
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<DetailSortMode>('date-desc');
+  const [dateDialog, setDateDialog] = useState<{ mode: 'copy' | 'edit'; snapshotId: string; date: string; error?: string } | null>(null);
   const visibleAccounts = useMemo(() => filterAccounts(data.accounts, categoryFilter, search), [data.accounts, categoryFilter, search]);
   const visibleSnapshots = useMemo(() => filterSnapshotsByIssue(sortSnapshotsForDetails(data.snapshots, sortMode), issueFilter), [data.snapshots, sortMode, issueFilter]);
 
@@ -79,10 +83,35 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
     onChange({ ...data, snapshots: data.snapshots.filter((snapshot) => snapshot.id !== snapshotId) });
   }
 
+  function requestDateChange(snapshot: AssetSnapshot, nextDate: string) {
+    if (!nextDate || nextDate === snapshot.date) return;
+    if (!isIsoDate(nextDate)) return;
+    if (snapshotsOnDate(data.snapshots, nextDate, snapshot.id).length === 0) {
+      onChange(applySnapshotDateChange(data, snapshot.id, nextDate, 'keep'));
+      return;
+    }
+    setDateDialog({ mode: 'edit', snapshotId: snapshot.id, date: nextDate });
+  }
+
   function duplicateSnapshot(snapshot: AssetSnapshot) {
-    const date = window.prompt('请输入复制后的日期', new Date().toISOString().slice(0, 10));
-    if (!date) return;
-    onChange({ ...data, snapshots: sortSnapshots([...data.snapshots, recalculateSnapshot({ ...snapshot, id: crypto.randomUUID(), date })]) });
+    setDateDialog({ mode: 'copy', snapshotId: snapshot.id, date: todayString() });
+  }
+
+  function confirmDateDialog(choice: 'overwrite' | 'keep' | 'none') {
+    if (!dateDialog) return;
+    if (!isIsoDate(dateDialog.date)) {
+      setDateDialog({ ...dateDialog, error: '请选择有效日期。' });
+      return;
+    }
+    const exceptId = dateDialog.mode === 'edit' ? dateDialog.snapshotId : undefined;
+    const conflictCount = snapshotsOnDate(data.snapshots, dateDialog.date, exceptId).length;
+    if (choice === 'none' && conflictCount > 0) return;
+    const mode = choice === 'overwrite' ? 'overwrite' : 'keep';
+    const next = dateDialog.mode === 'copy'
+      ? duplicateSnapshotWithDate(data, dateDialog.snapshotId, dateDialog.date, mode)
+      : applySnapshotDateChange(data, dateDialog.snapshotId, dateDialog.date, mode);
+    onChange(next);
+    setDateDialog(null);
   }
 
   function addAccount() {
@@ -223,7 +252,16 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
               const incomeCarryLabel = carriedIncome.inherited ? externalIncomeDateLabel(carriedIncome) : null;
               return (
                 <tr key={snapshot.id}>
-                  <td className="sticky-col"><strong>{snapshot.date}</strong></td>
+                  <td className="sticky-col details-date-cell">
+                    {isIsoDate(snapshot.date) ? (
+                      <input aria-label={`${snapshot.date}-日期`} type="date" value={snapshot.date} onChange={(event) => requestDateChange(snapshot, event.target.value)} />
+                    ) : (
+                      <>
+                        <strong>{snapshot.date}</strong>
+                        <button className="link-button" onClick={() => setDateDialog({ mode: 'edit', snapshotId: snapshot.id, date: todayString() })}>设置日期</button>
+                      </>
+                    )}
+                  </td>
                   {visibleAccounts.map((account) => {
                     const entry = entries.get(account.id);
                     if (mode === 'compact') {
@@ -247,7 +285,7 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
                   <td>{formatMoney(snapshot.computedLiabilityCny)}</td>
                   <td>{formatMoney(snapshot.excelTotal === undefined ? null : snapshot.computedGrossAssetsCny + snapshot.computedLiabilityCny - snapshot.excelTotal)}</td>
                   <td><RateEditor snapshot={snapshot} onUpdate={updateSnapshotRate} /></td>
-                  <td className="row-actions"><button onClick={() => duplicateSnapshot(snapshot)}>复制</button><button onClick={() => deleteSnapshot(snapshot.id)}>删除</button></td>
+                  <td className="row-actions"><button aria-label={`复制 ${snapshot.date}`} onClick={() => duplicateSnapshot(snapshot)}>复制</button><button aria-label={`删除 ${snapshot.date}`} onClick={() => deleteSnapshot(snapshot.id)}>删除</button></td>
                 </tr>
               );
             })}
@@ -255,6 +293,19 @@ export function DetailsTable({ data, onChange }: { data: AppData; onChange: (dat
         </table>
       </div>
       <button className="secondary-action" onClick={() => onChange({ ...data, snapshots: applyAccountsToSnapshots(data.snapshots, data.accounts) })}>按账户配置重算</button>
+      {dateDialog && (
+        <SnapshotDateDialog
+          title={dateDialog.mode === 'copy' ? '复制快照' : '修改快照日期'}
+          description={dateDialog.mode === 'copy' ? '将复制当前这一期的账户金额到所选日期。' : '修改后会按日期重新排序，其它字段保持不变。'}
+          date={dateDialog.date}
+          existingCount={snapshotsOnDate(data.snapshots, dateDialog.date, dateDialog.mode === 'edit' ? dateDialog.snapshotId : undefined).length}
+          error={dateDialog.error}
+          confirmLabel={dateDialog.mode === 'copy' ? '复制' : '保存日期'}
+          onDateChange={(date) => setDateDialog({ ...dateDialog, date, error: undefined })}
+          onConfirm={confirmDateDialog}
+          onCancel={() => setDateDialog(null)}
+        />
+      )}
     </section>
   );
 }

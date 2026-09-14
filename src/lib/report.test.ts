@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { availableReportRanges, accountContributionRows, buildStructuredReportSummary } from './report';
+import { availableReportRanges, accountContributionRows, applyReviewRangeRequest, buildStructuredReportSummary, syncReportRangeWithData, validateReportRange } from './report';
 import { recalculateSnapshot } from './calculations';
 import type { AppData, AssetSnapshot } from './types';
 
@@ -32,8 +32,46 @@ const data: AppData = {
 };
 
 describe('report helpers', () => {
-  it('provides quick report ranges', () => {
-    expect(availableReportRanges(data).map((range) => range.label)).toEqual(['全部', '近 1 个月', '近 3 个月', '近 1 年']);
+  it('provides quick report ranges anchored to the latest snapshot in local time', () => {
+    const ranges = availableReportRanges(data);
+    expect(ranges.map((range) => range.label)).toEqual(['全部', '本月', '近 1 个月', '近 3 个月', '近 1 年']);
+    expect(ranges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ preset: 'all', startDate: '2026-01-01', endDate: '2026-04-01' }),
+      expect.objectContaining({ preset: 'month', startDate: '2026-04-01', endDate: '2026-04-30' }),
+      expect.objectContaining({ preset: '1m', startDate: '2026-03-01', endDate: '2026-04-01' }),
+      expect.objectContaining({ preset: '3m', startDate: '2026-01-01', endDate: '2026-04-01' }),
+      expect.objectContaining({ preset: '1y', startDate: '2025-04-01', endDate: '2026-04-01' }),
+    ]));
+  });
+
+  it('keeps shortcut ranges following new snapshots, but leaves custom ranges alone', () => {
+    const custom = { startDate: '2026-02-01', endDate: '2026-03-01', preset: 'custom' as const };
+    expect(syncReportRangeWithData(data, custom)).toEqual(custom);
+
+    const nextData: AppData = {
+      ...data,
+      snapshots: [...data.snapshots, snapshot('2026-06-01', 200, 80)],
+    };
+    expect(syncReportRangeWithData(nextData, { startDate: '2026-01-01', endDate: '2026-04-01', preset: 'all' })).toEqual({
+      startDate: '2026-01-01',
+      endDate: '2026-06-01',
+      preset: 'all',
+    });
+  });
+
+  it('applies a dashboard month request without rewriting it to the latest month', () => {
+    expect(applyReviewRangeRequest({ startDate: '2026-02-01', endDate: '2026-02-28', preset: 'custom' }, data)).toEqual({
+      startDate: '2026-02-01',
+      endDate: '2026-02-28',
+      preset: 'custom',
+    });
+  });
+
+  it('rejects empty, invalid, and reversed ranges', () => {
+    expect(validateReportRange('', '2026-04-01')).toBe('请选择开始和结束日期。');
+    expect(validateReportRange('2026-02-31', '2026-04-01')).toBe('日期格式无效，请使用有效的日历日期。');
+    expect(validateReportRange('2026-05-01', '2026-04-01')).toBe('开始日期不能晚于结束日期。');
+    expect(validateReportRange('2026-01-01', '2026-04-01')).toBeNull();
   });
 
   it('computes account contribution rows', () => {

@@ -11,6 +11,7 @@ import { TopBar } from './components/TopBar';
 import { StrategyPanel } from './components/StrategyPanel';
 import { loadAppData, saveAppData } from './lib/storage';
 import { createSampleData } from './lib/sampleData';
+import type { ReviewRangeRequest } from './lib/report';
 import type { AppData } from './lib/types';
 import './styles.css';
 
@@ -19,6 +20,7 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [manualInputRequest, setManualInputRequest] = useState(0);
   const [activePanel, setActivePanel] = useState<ConsolePanelId | null>(null);
+  const [reviewRangeRequest, setReviewRangeRequest] = useState<ReviewRangeRequest | null>(null);
   const noticeTimerRef = useRef<number | null>(null);
   const activeTab = data.preferences.activeTab;
 
@@ -93,9 +95,12 @@ export default function App() {
       </nav>
 
       <main>
-        {activeTab === 'dashboard' && <Dashboard data={data} />}
+        {activeTab === 'dashboard' && <Dashboard data={data} onOpenMonthlyReview={(range) => {
+          setReviewRangeRequest(range);
+          setActiveTab('report');
+        }} />}
         {activeTab === 'details' && <DetailsTable data={data} onChange={updateData} />}
-        {activeTab === 'report' && <ReviewReport data={data} />}
+        {activeTab === 'report' && <ReviewReport data={data} rangeRequest={reviewRangeRequest} />}
         {activeTab === 'fire' && <FireView data={data} onChange={updateData} />}
       </main>
     </div>

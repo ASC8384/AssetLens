@@ -1,20 +1,66 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { AppData } from '../lib/types';
-import { availableReportRanges, buildStructuredReportSummary, generateMarkdownReport, snapshotsInRange, type ReportMode } from '../lib/report';
+import {
+  applyReviewRangeRequest,
+  availableReportRanges,
+  buildStructuredReportSummary,
+  defaultReportRange,
+  generateMarkdownReport,
+  matchingReportPreset,
+  snapshotsInRange,
+  syncReportRangeWithData,
+  validateReportRange,
+  type ReportMode,
+  type ReportRangePreset,
+  type ReviewRangeRequest,
+} from '../lib/report';
 import { formatMoney, formatPercent } from '../lib/format';
 
-export function ReviewReport({ data }: { data: AppData }) {
-  const firstDate = data.snapshots[0]?.date ?? '';
-  const lastDate = data.snapshots[data.snapshots.length - 1]?.date ?? '';
-  const [startDate, setStartDate] = useState(firstDate);
-  const [endDate, setEndDate] = useState(lastDate);
+export function ReviewReport({
+  data,
+  rangeRequest,
+}: {
+  data: AppData;
+  rangeRequest?: ReviewRangeRequest | null;
+}) {
+  const [range, setRange] = useState(() => defaultReportRange(data));
   const [mode, setMode] = useState<ReportMode>('endpoint');
   const ranges = useMemo(() => availableReportRanges(data), [data]);
-  const selectedSnapshots = useMemo(() => snapshotsInRange(data, startDate || firstDate, endDate || lastDate), [data, startDate, endDate, firstDate, lastDate]);
-  const effectiveStartDate = startDate || firstDate;
-  const effectiveEndDate = endDate || lastDate;
-  const summary = useMemo(() => buildStructuredReportSummary(data, effectiveStartDate, effectiveEndDate, mode), [data, effectiveStartDate, effectiveEndDate, mode]);
-  const report = useMemo(() => generateMarkdownReport(data, effectiveStartDate, effectiveEndDate, mode), [data, effectiveStartDate, effectiveEndDate, mode]);
+  const rangeError = validateReportRange(range.startDate, range.endDate);
+  const selectedSnapshots = useMemo(
+    () => rangeError ? [] : snapshotsInRange(data, range.startDate, range.endDate),
+    [data, range.startDate, range.endDate, rangeError],
+  );
+  const visualPreset = range.preset === 'custom' ? matchingReportPreset(data, range.startDate, range.endDate) : range.preset;
+  const summary = useMemo(
+    () => rangeError
+      ? emptySummary(rangeError)
+      : buildStructuredReportSummary(data, range.startDate, range.endDate, mode),
+    [data, range.startDate, range.endDate, mode, rangeError],
+  );
+  const report = useMemo(
+    () => rangeError ? rangeError : generateMarkdownReport(data, range.startDate, range.endDate, mode),
+    [data, range.startDate, range.endDate, mode, rangeError],
+  );
+
+  useEffect(() => {
+    setRange((current) => syncReportRangeWithData(data, current));
+  }, [data]);
+
+  useEffect(() => {
+    if (!rangeRequest) return;
+    setRange(applyReviewRangeRequest(rangeRequest, data));
+  }, [rangeRequest]);
+
+  function applyPreset(preset: Exclude<ReportRangePreset, 'custom'>) {
+    const next = ranges.find((item) => item.preset === preset);
+    if (!next) return;
+    setRange({ startDate: next.startDate, endDate: next.endDate, preset: next.preset });
+  }
+
+  function updateDate(patch: { startDate?: string; endDate?: string }) {
+    setRange((current) => ({ ...current, ...patch, preset: 'custom' }));
+  }
 
   async function copyReport() {
     await navigator.clipboard.writeText(report);
@@ -26,13 +72,26 @@ export function ReviewReport({ data }: { data: AppData }) {
         <div>
           <h2>复盘报告</h2>
           <p>选择时间范围，生成可复制的 Markdown 资产总结。</p>
+          <p className="report-range-hint">
+            {rangeError
+              ? rangeError
+              : `已选 ${range.startDate} → ${range.endDate} · ${selectedSnapshots.length} 期快照`}
+          </p>
         </div>
-        <div className="toolbar compact-toolbar">
+        <div className="toolbar compact-toolbar report-range-bar">
           <div className="range-buttons">
-            {ranges.map((range) => <button key={range.label} onClick={() => { setStartDate(range.startDate); setEndDate(range.endDate); }}>{range.label}</button>)}
+            {ranges.map((item) => (
+              <button
+                key={item.preset}
+                className={item.preset === visualPreset ? 'active' : ''}
+                onClick={() => applyPreset(item.preset)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
-          <label>开始 <input value={startDate} onChange={(event) => setStartDate(event.target.value)} placeholder={firstDate} /></label>
-          <label>结束 <input value={endDate} onChange={(event) => setEndDate(event.target.value)} placeholder={lastDate} /></label>
+          <label>开始 <input aria-label="开始" type="date" value={range.startDate} onChange={(event) => updateDate({ startDate: event.target.value })} /></label>
+          <label>结束 <input aria-label="结束" type="date" value={range.endDate} onChange={(event) => updateDate({ endDate: event.target.value })} /></label>
           <select value={mode} onChange={(event) => setMode(event.target.value as ReportMode)}>
             <option value="endpoint">期初 vs 期末</option>
             <option value="periodic">逐期变化</option>
@@ -87,4 +146,28 @@ export function ReviewReport({ data }: { data: AppData }) {
       <pre className="markdown-report">{report}</pre>
     </section>
   );
+}
+
+function emptySummary(message: string) {
+  return {
+    status: 'empty' as const,
+    message,
+    startDate: null,
+    endDate: null,
+    snapshotCount: 0,
+    startTotal: null,
+    endTotal: null,
+    totalChange: null,
+    growth: null,
+    topIncreases: [],
+    topDecreases: [],
+    categoryChanges: [],
+    riskAssetRatioChange: { start: null, end: null, change: null },
+    startLiability: null,
+    endLiability: null,
+    liabilityChange: null,
+    externalIncomeTotal: null,
+    afterIncomeChange: null,
+    dataQualityMessages: [message],
+  };
 }

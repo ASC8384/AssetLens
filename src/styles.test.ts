@@ -31,6 +31,24 @@ describe('dashboard layout css', () => {
   });
 });
 
+describe('time selection css', () => {
+  it('styles snapshot navigation, report range shortcuts, and date dialogs', () => {
+    const css = readFileSync('src/styles.css', 'utf8');
+
+    expect(css).toContain('.snapshot-navigator {');
+    expect(css).toContain('.snapshot-points { display: flex; flex-wrap: wrap; gap: 8px; }');
+    expect(css).toContain('.snapshot-points button.active { background: var(--navy); color: white; border-color: var(--navy); box-shadow: 0 14px 28px rgba(16,35,63,.16); }');
+    expect(css).toContain('.snapshot-year-group {');
+    expect(css).toContain('.snapshot-point-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(16,35,63,.18); flex-shrink: 0; }');
+    expect(css).toContain('.report-range-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; }');
+    expect(css).toContain('.range-buttons button.active { background: var(--navy); color: white; border-color: var(--navy); }');
+    expect(css).toContain('.date-dialog-backdrop {');
+    expect(css).not.toContain('.snapshot-track {');
+    expect(css).not.toContain('.snapshot-navigator-controls select');
+    expect(css).not.toContain('.dashboard-timebar { display: flex; justify-content: flex-end; gap: 10px; align-items: center; margin-top: 14px; }');
+  });
+});
+
 describe('control console css', () => {
   it('keeps three equal-height entry cards and a full-width expand body', () => {
     const css = readFileSync('src/styles.css', 'utf8');

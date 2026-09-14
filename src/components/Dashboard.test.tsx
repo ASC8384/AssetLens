@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { recalculateSnapshot } from '../lib/calculations';
 import type { AssetSnapshot } from '../lib/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Dashboard } from './Dashboard';
 import { createSampleData } from '../lib/sampleData';
 
@@ -43,7 +43,10 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('本月资产复盘入口')).toBeTruthy();
     expect(screen.getByText('生成本月复盘')).toBeTruthy();
-    expect(screen.getByText('快照时间轴')).toBeTruthy();
+    expect(screen.getByText('查看时点')).toBeTruthy();
+    expect(screen.getByLabelText('2026 年快照')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2026-03-01' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2026-05-01' })).toBeTruthy();
     expect(screen.getByText('账户洞察')).toBeTruthy();
     expect(screen.getByText('增长账户 Top 5')).toBeTruthy();
     expect(screen.getByText('下降账户 Top 5')).toBeTruthy();
@@ -65,8 +68,8 @@ describe('Dashboard', () => {
 
     render(<Dashboard data={data} />);
 
-    expect(screen.getByRole('option', { name: '2026-02-01 · 同日第 1 条' })).toBeTruthy();
-    expect(screen.getByRole('option', { name: '2026-02-01 · 同日第 2 条' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2026-02-01 · 同日第 1 条' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2026-02-01 · 同日第 2 条' })).toBeTruthy();
   });
 
   it('reuses the last recorded external income and marks its date', () => {
@@ -82,5 +85,63 @@ describe('Dashboard', () => {
 
     expect(screen.getAllByText(/沿用 2026-01-01/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('¥8,000.00').length).toBeGreaterThan(0);
+  });
+
+  it('navigates between snapshots without leaving the latest-follow mode until a period is chosen', () => {
+    render(<Dashboard data={createSampleData()} />);
+
+    expect(screen.getByText('最新净资产 · 2026-05-01')).toBeTruthy();
+    expect((screen.getByRole('button', { name: '下一期' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '最新一期' }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: '上一期' }));
+
+    expect(screen.getByText('选中时点 · 2026-04-01')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2026-04-01' }).className).toContain('active');
+    expect((screen.getByRole('button', { name: '最新一期' }) as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: '最新一期' }));
+    expect(screen.getByText('最新净资产 · 2026-05-01')).toBeTruthy();
+  });
+
+  it('lets the user pick a snapshot from the wrapped date list', () => {
+    render(<Dashboard data={createSampleData()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '2026-03-01' }));
+
+    expect(screen.getByText('选中时点 · 2026-03-01')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2026-03-01' }).className).toContain('active');
+    expect((screen.getByRole('button', { name: '上一期' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('groups snapshot dates by year so long histories stay scannable', () => {
+    const data = {
+      ...createSampleData(),
+      snapshots: [
+        snapshot('y24', '2024-12-01', 80),
+        snapshot('y25', '2025-06-01', 90),
+        snapshot('y26', '2026-05-01', 120),
+      ],
+    };
+
+    render(<Dashboard data={data} />);
+
+    expect(screen.getByText('2024 年')).toBeTruthy();
+    expect(screen.getByText('2025 年')).toBeTruthy();
+    expect(screen.getByText('2026 年')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2024-12-01' }).textContent).toContain('12月');
+    expect(screen.getByRole('button', { name: '2026-05-01' }).textContent).toContain('5月');
+  });
+
+  it('opens a monthly review for the selected snapshot calendar month', () => {
+    const onOpenMonthlyReview = vi.fn();
+    render(<Dashboard data={createSampleData()} onOpenMonthlyReview={onOpenMonthlyReview} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '生成本月复盘' }));
+    expect(onOpenMonthlyReview).toHaveBeenCalledWith({ startDate: '2026-05-01', endDate: '2026-05-31', preset: 'custom' });
+
+    fireEvent.click(screen.getByRole('button', { name: '上一期' }));
+    fireEvent.click(screen.getByRole('button', { name: '生成本月复盘' }));
+    expect(onOpenMonthlyReview).toHaveBeenLastCalledWith({ startDate: '2026-04-01', endDate: '2026-04-30', preset: 'custom' });
   });
 });

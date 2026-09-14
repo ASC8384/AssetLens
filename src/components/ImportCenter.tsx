@@ -6,6 +6,9 @@ import { formatMoney, formatPercent } from '../lib/format';
 import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
 import type { AccountConfig, AppData, DuplicateDateMode, FieldMapping, ImportDraft } from '../lib/types';
 import { categories, venues } from '../lib/defaults';
+import { isIsoDate, todayString } from '../lib/dates';
+import { snapshotsOnDate } from '../lib/snapshotDates';
+import { SnapshotDateDialog } from './SnapshotDateDialog';
 
 type ManualSource = 'latest' | 'blank';
 
@@ -26,14 +29,6 @@ export type ImportCompletion = {
   warningCount: number;
   isFirstImport: boolean;
 };
-
-function todayString(): string {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
 
 function manualAccounts(data: AppData): AccountConfig[] {
   const previous = data.snapshots[data.snapshots.length - 1];
@@ -72,6 +67,8 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
   const [manualDraft, setManualDraft] = useState<ManualDraft | null>(null);
   const [pasteText, setPasteText] = useState('');
   const [duplicateMode, setDuplicateMode] = useState<DuplicateDateMode>('overwrite');
+  const [manualError, setManualError] = useState('');
+  const [pendingManualDate, setPendingManualDate] = useState<string | null>(null);
   const importedPreview = useMemo(() => draft ? buildSnapshotsFromDraft(draft, data.accounts, data.defaultExchangeRates) : null, [draft, data.accounts, data.defaultExchangeRates]);
   const importQuality = useMemo(() => importedPreview ? analyzeImportQuality(importedPreview.snapshots, importedPreview.accounts.length) : null, [importedPreview]);
   const manualAccountList = useMemo(() => manualAccounts(data), [data]);
@@ -84,12 +81,16 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
     if (manualInputRequest <= 0) return;
     setDraft(null);
     setDuplicateMode('overwrite');
+    setManualError('');
+    setPendingManualDate(null);
     setManualDraft(createManualDraft(data, manualAccountList));
   }, [manualInputRequest, data, manualAccountList]);
 
   async function handleFile(file: File | null) {
     if (!file) return;
     setManualDraft(null);
+    setPendingManualDate(null);
+    setManualError('');
     const parsed = await parseExcelFile(file);
     setDraft(createImportDraft(parsed));
   }
@@ -97,12 +98,16 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
   function handlePasteParse() {
     if (!pasteText.trim()) return;
     setManualDraft(null);
+    setPendingManualDate(null);
+    setManualError('');
     setDraft(createImportDraft(parsePastedTable(pasteText)));
   }
 
   function startManualInput() {
     setDraft(null);
     setDuplicateMode('overwrite');
+    setManualError('');
+    setPendingManualDate(null);
     setManualDraft(createManualDraft(data, manualAccountList));
   }
 
@@ -153,19 +158,35 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
     setPasteText('');
   }
 
-  function confirmManualInput() {
-    if (!manualDraft?.date || manualAccountList.length === 0) return;
-        const snapshot = buildManualSnapshot(data, manualDraft.date, manualDraft.amountByAccountId, {
-          externalIncome: manualDraft.externalIncome,
-          note: manualDraft.note,
-        });
-    const nextData = mergeImportedData(data, [snapshot], manualAccountList, duplicateMode);
+  function saveManualSnapshot(date: string, mode: DuplicateDateMode) {
+    if (!manualDraft || manualAccountList.length === 0) return;
+    const snapshot = buildManualSnapshot(data, date, manualDraft.amountByAccountId, {
+      externalIncome: manualDraft.externalIncome,
+      note: manualDraft.note,
+    });
+    const nextData = mergeImportedData(data, [snapshot], manualAccountList, mode);
     if (onManualSnapshotCreated) {
       onManualSnapshotCreated(nextData);
     } else {
       onChange(nextData);
     }
     setManualDraft(null);
+    setManualError('');
+    setPendingManualDate(null);
+  }
+
+  function confirmManualInput() {
+    if (!manualDraft || manualAccountList.length === 0) return;
+    if (!isIsoDate(manualDraft.date)) {
+      setManualError('请选择有效日期。');
+      return;
+    }
+    if (snapshotsOnDate(data.snapshots, manualDraft.date).length > 0) {
+      setManualError('');
+      setPendingManualDate(manualDraft.date);
+      return;
+    }
+    saveManualSnapshot(manualDraft.date, 'keep');
   }
 
   return (
@@ -207,17 +228,13 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
                       <option value="blank">空白金额</option>
                     </select>
                   </label>
-                  <select aria-label="重复日期处理方式" value={duplicateMode} onChange={(event) => setDuplicateMode(event.target.value as DuplicateDateMode)}>
-                    <option value="overwrite">重复日期覆盖</option>
-                    <option value="keep">重复日期保留新记录</option>
-                    <option value="skip">重复日期跳过</option>
-                  </select>
                   <button className="primary" onClick={confirmManualInput}>保存</button>
                 </>
               )}
-              <button onClick={() => setManualDraft(null)}>取消</button>
+              <button onClick={() => { setManualDraft(null); setPendingManualDate(null); setManualError(''); }}>取消</button>
             </div>
           </div>
+          {manualError ? <p className="danger-text">{manualError}</p> : null}
 
           {manualAccountList.length === 0 ? (
             <p>请先导入一次数据，或先到明细表新增账户。</p>
@@ -234,6 +251,29 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
             </div>
           )}
         </div>
+      )}
+
+      {pendingManualDate !== null && manualDraft && (
+        <SnapshotDateDialog
+          title="日期已有记录"
+          description="这份日期已经有快照。覆盖会替换当天已有记录，保留则会新增一条同日快照。"
+          date={pendingManualDate}
+          existingCount={snapshotsOnDate(data.snapshots, pendingManualDate).length}
+          error={manualError}
+          onDateChange={(date) => {
+            setPendingManualDate(date);
+            setManualDraft({ ...manualDraft, date });
+          }}
+          onConfirm={(choice) => {
+            if (!isIsoDate(pendingManualDate)) {
+              setManualError('请选择有效日期。');
+              return;
+            }
+            if (choice === 'none' && snapshotsOnDate(data.snapshots, pendingManualDate).length > 0) return;
+            saveManualSnapshot(pendingManualDate, choice === 'overwrite' ? 'overwrite' : 'keep');
+          }}
+          onCancel={() => setPendingManualDate(null)}
+        />
       )}
 
       <div className="import-grid">

@@ -1,16 +1,31 @@
 import type { AppData, AssetCategory, AssetSnapshot } from './types';
 import { accountChanges, categoryTotals, riskAssetTotal } from './calculations';
+import { calendarMonthRange, isIsoDate, shiftMonth } from './dates';
 import { categories } from './defaults';
 import { formatMoney, formatPercent } from './format';
 import { analyzeStrategy } from './strategy';
 import { totalQuality } from './dashboard';
 
 export type ReportMode = 'endpoint' | 'periodic';
+export type ReportRangePreset = 'all' | 'month' | '1m' | '3m' | '1y' | 'custom';
 
 export type ReportRange = {
   label: string;
   startDate: string;
   endDate: string;
+  preset: Exclude<ReportRangePreset, 'custom'>;
+};
+
+export type ReviewRangeRequest = {
+  startDate: string;
+  endDate: string;
+  preset?: ReportRangePreset;
+};
+
+export type ReportRangeState = {
+  startDate: string;
+  endDate: string;
+  preset: ReportRangePreset;
 };
 
 export type StructuredReportSummary = {
@@ -38,19 +53,56 @@ export type StructuredReportSummary = {
 export function availableReportRanges(data: AppData): ReportRange[] {
   const first = data.snapshots[0]?.date ?? '';
   const last = data.snapshots[data.snapshots.length - 1]?.date ?? '';
+  const thisMonth = calendarMonthRange(last);
   return [
-    { label: '全部', startDate: first, endDate: last },
-    { label: '近 1 个月', startDate: shiftMonth(last, -1), endDate: last },
-    { label: '近 3 个月', startDate: shiftMonth(last, -3), endDate: last },
-    { label: '近 1 年', startDate: shiftMonth(last, -12), endDate: last },
+    { label: '全部', startDate: first, endDate: last, preset: 'all' },
+    { label: '本月', startDate: thisMonth.startDate, endDate: thisMonth.endDate, preset: 'month' },
+    { label: '近 1 个月', startDate: shiftMonth(last, -1), endDate: last, preset: '1m' },
+    { label: '近 3 个月', startDate: shiftMonth(last, -3), endDate: last, preset: '3m' },
+    { label: '近 1 年', startDate: shiftMonth(last, -12), endDate: last, preset: '1y' },
   ];
 }
 
-function shiftMonth(date: string, offset: number): string {
-  if (!date) return '';
-  const current = new Date(`${date}T00:00:00`);
-  current.setMonth(current.getMonth() + offset);
-  return current.toISOString().slice(0, 10);
+export function reportRangeFromPreset(data: AppData, preset: Exclude<ReportRangePreset, 'custom'>): ReportRange {
+  return availableReportRanges(data).find((range) => range.preset === preset) ?? availableReportRanges(data)[0];
+}
+
+export function defaultReportRange(data: AppData): ReportRangeState {
+  const range = reportRangeFromPreset(data, 'all');
+  return { startDate: range.startDate, endDate: range.endDate, preset: 'all' };
+}
+
+export function applyReviewRangeRequest(request: ReviewRangeRequest, data: AppData): ReportRangeState {
+  if (request.preset && request.preset !== 'custom') {
+    const range = reportRangeFromPreset(data, request.preset);
+    return {
+      startDate: request.startDate || range.startDate,
+      endDate: request.endDate || range.endDate,
+      preset: request.preset,
+    };
+  }
+  return {
+    startDate: request.startDate,
+    endDate: request.endDate,
+    preset: 'custom',
+  };
+}
+
+export function syncReportRangeWithData(data: AppData, current: ReportRangeState): ReportRangeState {
+  if (current.preset === 'custom') return current;
+  const range = reportRangeFromPreset(data, current.preset);
+  return { startDate: range.startDate, endDate: range.endDate, preset: current.preset };
+}
+
+export function matchingReportPreset(data: AppData, startDate: string, endDate: string): ReportRangePreset {
+  return availableReportRanges(data).find((range) => range.startDate === startDate && range.endDate === endDate)?.preset ?? 'custom';
+}
+
+export function validateReportRange(startDate: string, endDate: string): string | null {
+  if (!startDate || !endDate) return '请选择开始和结束日期。';
+  if (!isIsoDate(startDate) || !isIsoDate(endDate)) return '日期格式无效，请使用有效的日历日期。';
+  if (startDate > endDate) return '开始日期不能晚于结束日期。';
+  return null;
 }
 
 export function snapshotsInRange(data: AppData, startDate: string, endDate: string): AssetSnapshot[] {

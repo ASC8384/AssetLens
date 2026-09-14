@@ -1,13 +1,14 @@
-import type { AppData } from '../lib/types';
+import { todayString } from '../lib/dates';
 import { createEmptyAppData } from '../lib/defaults';
 import { exportBackup, importBackup } from '../lib/storage';
 import { downloadText } from '../lib/format';
 import { createSampleData } from '../lib/sampleData';
+import type { AppData } from '../lib/types';
 
 export function TopBar({ data, onChange, onManualInputRequest }: { data: AppData; onChange: (data: AppData) => void; onManualInputRequest: () => void }) {
 
   function exportJson() {
-    downloadText(`asset-lens-backup-${new Date().toISOString().slice(0, 10)}.json`, exportBackup(data));
+    downloadText(`asset-lens-backup-${todayString()}.json`, exportBackup(data));
   }
 
   async function importJson(file: File | null) {

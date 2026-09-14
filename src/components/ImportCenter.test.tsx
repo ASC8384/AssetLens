@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImportCenter } from './ImportCenter';
 import { createSampleData } from '../lib/sampleData';
 import { createEmptyAppData } from '../lib/defaults';
+import { snapshotsOnDate } from '../lib/snapshotDates';
 import type { AppData } from '../lib/types';
 
 describe('ImportCenter manual snapshot flow', () => {
@@ -62,6 +63,7 @@ describe('ImportCenter manual snapshot flow', () => {
     fireEvent.click(screen.getByText('保存'));
 
     expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByText('请选择有效日期。')).toBeTruthy();
   });
 
   it('can start manual input from an external request', () => {
@@ -92,6 +94,49 @@ describe('ImportCenter manual snapshot flow', () => {
     fireEvent.click(screen.getByText('保存'));
 
     expect(onManualSnapshotCreated).toHaveBeenCalledWith(expect.objectContaining({ snapshots: expect.any(Array) }));
+  });
+
+  it('asks how to handle a conflicting date before saving a manual snapshot', () => {
+    const onChange = vi.fn();
+    render(<ImportCenter data={createSampleData()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByText('开始手动输入'));
+    fireEvent.change(screen.getByLabelText('日期'), { target: { value: '2026-05-01' } });
+    fireEvent.click(screen.getByText('保存'));
+
+    expect(onChange).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/已有 2026-05-01 的记录/)).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByText('取消'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('日期') as HTMLInputElement).value).toBe('2026-05-01');
+  });
+
+  it('can overwrite or keep an existing snapshot date from the confirmation dialog', () => {
+    const overwrite = vi.fn();
+    const { unmount } = render(<ImportCenter data={createSampleData()} onChange={overwrite} />);
+    fireEvent.click(screen.getByText('开始手动输入'));
+    fireEvent.change(screen.getByLabelText('日期'), { target: { value: '2026-05-01' } });
+    fireEvent.click(screen.getByText('保存'));
+    fireEvent.click(screen.getByRole('button', { name: '覆盖已有记录' }));
+
+    const overwritten = overwrite.mock.calls[0][0] as AppData;
+    expect(overwritten.snapshots).toHaveLength(3);
+    expect(snapshotsOnDate(overwritten.snapshots, '2026-05-01')).toHaveLength(1);
+    unmount();
+
+    const keep = vi.fn();
+    render(<ImportCenter data={createSampleData()} onChange={keep} />);
+    fireEvent.click(screen.getByText('开始手动输入'));
+    fireEvent.change(screen.getByLabelText('日期'), { target: { value: '2026-05-01' } });
+    fireEvent.click(screen.getByText('保存'));
+    fireEvent.click(screen.getByRole('button', { name: '保留同日记录' }));
+
+    const kept = keep.mock.calls[0][0] as AppData;
+    expect(kept.snapshots).toHaveLength(4);
+    expect(snapshotsOnDate(kept.snapshots, '2026-05-01')).toHaveLength(2);
   });
 
   it('shows a prompt instead of the full form when there are no accounts to fill', () => {

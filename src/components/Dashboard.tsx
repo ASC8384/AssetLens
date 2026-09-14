@@ -6,12 +6,15 @@ import { assetCategories, categories, categoryColors, venueColors, venues } from
 import { formatMoney, formatPercent } from '../lib/format';
 import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
 import { analyzeStrategy } from '../lib/strategy';
+import { calendarMonthRange, snapshotDateLabel } from '../lib/dates';
+import type { ReviewRangeRequest } from '../lib/report';
 import type { AppData } from '../lib/types';
 
-export function Dashboard({ data }: { data: AppData }) {
+export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpenMonthlyReview?: (range: ReviewRangeRequest) => void }) {
   const snapshots = data.snapshots;
   const [selectedSnapshotId, setSelectedSnapshotId] = useState('');
-  const { selected, previous } = selectedSnapshotContext(snapshots, selectedSnapshotId);
+  const { selected, previous, selectedIndex } = selectedSnapshotContext(snapshots, selectedSnapshotId);
+  const isFollowingLatest = !selectedSnapshotId;
   if (!selected) {
     return <EmptyState />;
   }
@@ -46,7 +49,7 @@ export function Dashboard({ data }: { data: AppData }) {
         <div className="hero-copy">
           <span className="eyebrow">PORTFOLIO RADAR</span>
           <h2>{formatMoney(selected.computedTotalCny)}</h2>
-          <p>{selectedSnapshotId ? '选中时点' : '最新净资产'} · {selected.date}</p>
+          <p>{isFollowingLatest ? '最新净资产' : '选中时点'} · {selected.date}</p>
         </div>
         <div className="hero-orbit" aria-hidden="true">
           <span className="orbit-ring ring-one" />
@@ -79,24 +82,17 @@ export function Dashboard({ data }: { data: AppData }) {
           <h3>本月资产复盘入口</h3>
           <p>最近一期较上一期变化 {formatMoney(change.amount)}，风险资产占比 {formatPercent(summary.riskAssetRatio)}。</p>
         </div>
-        <button className="primary">生成本月复盘</button>
+        <button className="primary" onClick={() => onOpenMonthlyReview?.({ ...calendarMonthRange(selected.date), preset: 'custom' })}>生成本月复盘</button>
       </div>
 
-      <div className="snapshot-timeline chart-card">
-        <h3>快照时间轴</h3>
-        <div className="timeline-points">
-          {snapshots.map((snapshot) => <button key={snapshot.id} className={snapshot.id === selected.id ? 'active' : ''} onClick={() => setSelectedSnapshotId(snapshot.id)}>{snapshot.date}</button>)}
-        </div>
-      </div>
-
-      <div className="dashboard-timebar">
-        <label>查看时间节点
-          <select value={selected?.id ?? ''} onChange={(event) => setSelectedSnapshotId(event.target.value)}>
-            {snapshots.map((snapshot, index) => <option key={snapshot.id} value={snapshot.id}>{duplicateDateLabel(snapshots, snapshot, index)}</option>)}
-          </select>
-        </label>
-        <button onClick={() => setSelectedSnapshotId(snapshots[snapshots.length - 1]?.id ?? '')}>跳到最新</button>
-      </div>
+      <SnapshotNavigator
+        snapshots={snapshots}
+        selected={selected}
+        previous={previous}
+        selectedIndex={selectedIndex}
+        isFollowingLatest={isFollowingLatest}
+        onSelect={setSelectedSnapshotId}
+      />
 
       <div className="insight-strip">
         <div><span>主导资产</span><strong>{summary.leaderCategory ?? '—'}</strong><small>{formatMoney(summary.leaderAmount)}</small></div>
@@ -287,10 +283,96 @@ export function Dashboard({ data }: { data: AppData }) {
   );
 }
 
-function duplicateDateLabel(snapshots: AppData['snapshots'], snapshot: AppData['snapshots'][number], index: number): string {
-  const duplicateIndex = snapshots.slice(0, index + 1).filter((item) => item.date === snapshot.date).length;
-  const duplicateCount = snapshots.filter((item) => item.date === snapshot.date).length;
-  return duplicateCount > 1 ? `${snapshot.date} · 同日第 ${duplicateIndex} 条` : snapshot.date;
+function SnapshotNavigator({
+  snapshots,
+  selected,
+  previous,
+  selectedIndex,
+  isFollowingLatest,
+  onSelect,
+}: {
+  snapshots: AppData['snapshots'];
+  selected: AppData['snapshots'][number];
+  previous: AppData['snapshots'][number] | undefined;
+  selectedIndex: number;
+  isFollowingLatest: boolean;
+  onSelect: (snapshotId: string) => void;
+}) {
+  const yearGroups = groupSnapshotsByYear(snapshots);
+
+  return (
+    <div className="snapshot-navigator chart-card">
+      <div className="snapshot-navigator-header">
+        <div>
+          <span className="eyebrow">TIMEPOINT</span>
+          <h3>查看时点</h3>
+          <p>{isFollowingLatest ? '正在看最新一期' : '正在看选中时点'} · {snapshotDateLabel(snapshots, selected)}</p>
+          <p className="snapshot-navigator-meta">
+            <span className="snapshot-count-pill">{selectedIndex + 1} / {snapshots.length}</span>
+            {previous ? `对比上一期 ${previous.date}` : '暂无前一期'}
+          </p>
+        </div>
+        <div className="snapshot-navigator-actions">
+          <button disabled={selectedIndex <= 0} onClick={() => onSelect(snapshots[selectedIndex - 1]?.id ?? '')}>上一期</button>
+          <button disabled={selectedIndex >= snapshots.length - 1} onClick={() => onSelect(snapshots[selectedIndex + 1]?.id ?? '')}>下一期</button>
+          <button className="snapshot-latest-button" disabled={isFollowingLatest} onClick={() => onSelect('')}>最新一期</button>
+        </div>
+      </div>
+      {yearGroups.map((group) => (
+        <div className="snapshot-year-group" key={group.year}>
+          <span>{group.year} 年</span>
+          <div className="snapshot-points" aria-label={`${group.year} 年快照`}>
+            {group.items.map((snapshot) => {
+              const extra = snapshotDateExtra(snapshots, snapshot);
+              const parts = snapshotChipParts(snapshot.date);
+              return (
+                <button
+                  key={snapshot.id}
+                  className={snapshot.id === selected.id ? 'active' : ''}
+                  aria-current={snapshot.id === selected.id ? 'true' : undefined}
+                  aria-label={snapshotDateLabel(snapshots, snapshot)}
+                  onClick={() => onSelect(snapshot.id)}
+                >
+                  <i className="snapshot-point-dot" aria-hidden="true" />
+                  {parts ? (
+                    <span className="snapshot-point-text">
+                      <small>{parts.month}</small>
+                      <strong>{parts.day}</strong>
+                    </span>
+                  ) : (
+                    <strong>{snapshot.date}</strong>
+                  )}
+                  {extra ? <small className="snapshot-point-extra">{extra}</small> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function groupSnapshotsByYear<T extends { date: string }>(snapshots: T[]): Array<{ year: string; items: T[] }> {
+  const groups: Array<{ year: string; items: T[] }> = [];
+  for (const snapshot of snapshots) {
+    const year = snapshot.date.slice(0, 4);
+    const current = groups[groups.length - 1];
+    if (current?.year === year) current.items.push(snapshot);
+    else groups.push({ year, items: [snapshot] });
+  }
+  return groups;
+}
+
+function snapshotChipParts(date: string): { month: string; day: string } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return null;
+  return { month: `${Number(match[2])}月`, day: match[3] };
+}
+
+function snapshotDateExtra(snapshots: AppData['snapshots'], snapshot: AppData['snapshots'][number]): string | null {
+  const label = snapshotDateLabel(snapshots, snapshot);
+  return label === snapshot.date ? null : label.replace(`${snapshot.date} · `, '');
 }
 
 function Metric({ title, value, hint, tone }: { title: string; value: string; hint: string; tone?: 'positive' | 'negative' }) {
