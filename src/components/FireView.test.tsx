@@ -19,7 +19,7 @@ describe('FireView', () => {
     expect(screen.getAllByText('当前配置').length).toBeGreaterThan(0);
     expect(screen.queryByText('提取率场景')).toBeNull();
     expect(screen.getByText('历史速度估算')).toBeTruthy();
-    expect(screen.getByText('最近一次更新')).toBeTruthy();
+    expect(screen.getByText('最近一个月速度')).toBeTruthy();
     expect(screen.getByText('近一年速度')).toBeTruthy();
     expect(screen.getByText('历史以来速度')).toBeTruthy();
     expect(screen.getAllByText('可信度').length).toBeGreaterThan(0);

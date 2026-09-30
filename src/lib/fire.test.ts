@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeFire, createDefaultFireConfig, fireDecisionSummary, fireSensitivityMatrix, fireSpeedEstimates } from './fire';
 import { recalculateSnapshot } from './calculations';
+import { DAYS_PER_MONTH } from './intervals';
 import type { AssetSnapshot } from './types';
+
+const months = (days: number) => days / DAYS_PER_MONTH;
 
 function snapshot(date: string, total: number): AssetSnapshot {
   return recalculateSnapshot({
@@ -64,11 +67,53 @@ describe('FIRE speed estimates', () => {
       snapshot('2026-02-01', 1100000),
     ], 2000000);
 
-    expect(estimates[0]).toMatchObject({ confidenceLabel: '样本不足', months: 1 });
+    expect(estimates[0]).toMatchObject({ confidenceLabel: '样本不足', months: months(31), incomeAmortized: false });
     expect(estimates[1]).toMatchObject({ confidenceLabel: '样本不足' });
   });
 
-  it('marks latest speed as volatile when it is much larger than all-time speed', () => {
+  it('counts months from actual days instead of calendar month boundaries', () => {
+    const estimates = fireSpeedEstimates([
+      snapshot('2026-04-28', 1000000),
+      snapshot('2026-05-06', 1000800),
+    ], 2000000);
+
+    expect(estimates[0].months).toBeCloseTo(months(8));
+    expect(estimates[0].monthlyChange).toBeCloseTo(100 * DAYS_PER_MONTH);
+  });
+
+  it('starts the last-month speed from the latest snapshot at least one month earlier', () => {
+    const estimates = fireSpeedEstimates([
+      snapshot('2026-03-05', 1000000),
+      snapshot('2026-04-28', 1020000),
+      snapshot('2026-05-06', 1020800),
+    ], 2000000);
+
+    expect(estimates[0]).toMatchObject({ key: 'lastMonth', label: '最近一个月速度', startDate: '2026-03-05', endDate: '2026-05-06' });
+    expect(estimates[0].monthlyChange).toBeCloseTo(20800 / months(62));
+  });
+
+  it('clamps month-end dates when looking one month back', () => {
+    const estimates = fireSpeedEstimates([
+      snapshot('2026-02-28', 1000000),
+      snapshot('2026-03-03', 1001000),
+      snapshot('2026-03-31', 1010000),
+    ], 2000000);
+
+    expect(estimates[0].startDate).toBe('2026-02-28');
+  });
+
+  it('spreads external income over days for the last-month speed', () => {
+    const estimates = fireSpeedEstimates([
+      { ...snapshot('2026-01-01', 1000000), externalIncome: 10000 },
+      { ...snapshot('2026-01-25', 1012400), externalIncome: 10000 },
+      snapshot('2026-02-02', 1013200),
+    ], 2000000);
+
+    expect(estimates[0]).toMatchObject({ key: 'lastMonth', startDate: '2026-01-01', incomeAmortized: true });
+    expect(estimates[0].monthlyChange).toBeCloseTo((100 + 10000 / 24) * DAYS_PER_MONTH);
+  });
+
+  it('marks last-month speed as volatile when it is much larger than all-time speed', () => {
     const estimates = fireSpeedEstimates([
       snapshot('2025-01-01', 1000000),
       snapshot('2025-07-01', 1060000),
@@ -76,12 +121,12 @@ describe('FIRE speed estimates', () => {
       snapshot('2026-02-01', 1600000),
     ], 2000000);
 
-    expect(estimates.find((estimate) => estimate.key === 'latest')).toMatchObject({
+    expect(estimates.find((estimate) => estimate.key === 'lastMonth')).toMatchObject({
       confidenceLabel: '波动较大',
     });
   });
 
-  it('estimates months to FIRE from latest interval, last year and all history speeds', () => {
+  it('estimates months to FIRE from last month, last year and all history speeds', () => {
     const snapshots = [
       snapshot('2025-01-01', 1000000),
       snapshot('2025-07-01', 1300000),
@@ -90,9 +135,9 @@ describe('FIRE speed estimates', () => {
     ];
 
     expect(fireSpeedEstimates(snapshots, 2000000)).toEqual([
-      expect.objectContaining({ key: 'latest', monthlyChange: 100000, projectedMonthsToFire: 3 }),
-      expect.objectContaining({ key: 'lastYear', monthlyChange: 400000 / 7, projectedMonthsToFire: 6 }),
-      expect.objectContaining({ key: 'allTime', monthlyChange: 700000 / 13, projectedMonthsToFire: 6 }),
+      expect.objectContaining({ key: 'lastMonth', monthlyChange: expect.closeTo(100000 / months(31)), projectedMonthsToFire: 4 }),
+      expect.objectContaining({ key: 'lastYear', monthlyChange: expect.closeTo(400000 / months(215)), projectedMonthsToFire: 6 }),
+      expect.objectContaining({ key: 'allTime', monthlyChange: expect.closeTo(700000 / months(396)), projectedMonthsToFire: 6 }),
     ]);
   });
 });
@@ -109,7 +154,7 @@ describe('FIRE analysis', () => {
     expect(result.emergencyReserveTarget).toBe(120000);
     expect(result.emergencyReserveGap).toBe(0);
     expect(result.fireTarget).toBeCloseTo(120000 / 0.035);
-    expect(result.monthlyGrowth).toBe(100000);
+    expect(result.monthlyGrowth).toBeCloseTo(100000 / months(31));
   });
 
   it('keeps historical speed independent from expected annual return', () => {
@@ -131,7 +176,7 @@ describe('FIRE analysis', () => {
     expect(result.forecasts.withReturnMonths).toBeGreaterThan(0);
     expect(result.forecasts.stressMonths).toBeNull();
     expect(result.expectedAnnualReturn).toBe(0.04);
-    expect(result.monthlyGrowth).toBe(100000);
+    expect(result.monthlyGrowth).toBeCloseTo(100000 / months(31));
   });
 
   it('does not estimate return-only FIRE when assets or returns cannot compound', () => {

@@ -1,15 +1,17 @@
 import { categoryTotals, stablePoolTotal } from './calculations';
-import { externalIncomeDateLabel, resolveExternalIncome } from './income';
+import { intervalExternalIncome, intervalExternalIncomeLabel } from './income';
+import { DAYS_PER_MONTH, daysBetween, snapshotIntervalRows } from './intervals';
 import type { AssetSnapshot, FireConfig } from './types';
 
 export type FireSpeedEstimate = {
-  key: 'latest' | 'lastYear' | 'allTime';
+  key: 'lastMonth' | 'lastYear' | 'allTime';
   label: string;
   monthlyChange: number | null;
   projectedMonthsToFire: number | null;
   startDate: string | null;
   endDate: string | null;
   months: number | null;
+  incomeAmortized: boolean;
   confidenceLabel: '样本不足' | '波动较大' | '无法外推' | '可参考';
   note: string;
 };
@@ -137,13 +139,13 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
   const emergencyAssets = totals ? stablePoolTotal(totals) : 0;
   const emergencyReserveTarget = config.monthlyExpense * config.emergencyReserveMonthsTarget;
   const emergencyReserveGap = Math.max(0, emergencyReserveTarget - emergencyAssets);
-  const latestIncome = resolveExternalIncome(snapshots, latest);
+  const latestIncome = latest ? intervalExternalIncome(snapshots, latest) : null;
   return {
     currentNetWorth,
     currentGrossAssets: latest?.computedGrossAssetsCny ?? 0,
     currentLiability: latest?.computedLiabilityCny ?? 0,
-    latestExternalIncome: latestIncome.amount,
-    latestExternalIncomeLabel: externalIncomeDateLabel(latestIncome),
+    latestExternalIncome: latestIncome?.amount ?? null,
+    latestExternalIncomeLabel: latest && latestIncome ? intervalExternalIncomeLabel(latestIncome, latest.date) : null,
     annualExpense,
     fireTarget,
     fireProgress: fireTarget === 0 ? 0 : currentNetWorth / fireTarget,
@@ -170,36 +172,46 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
 }
 
 export function fireSpeedEstimates(snapshots: AssetSnapshot[], fireTarget: number): FireSpeedEstimate[] {
-  const allTimeMonthlyChange = snapshots.length >= 2 ? (snapshots[snapshots.length - 1].computedTotalCny - snapshots[0].computedTotalCny) / Math.max(1, monthDiff(snapshots[0].date, snapshots[snapshots.length - 1].date)) : null;
-  const latest = latestIntervalEstimate(snapshots, fireTarget, allTimeMonthlyChange);
+  const allTimeMonthlyChange = averageMonthlyGrowth(snapshots);
+  const lastMonth = lastMonthEstimate(snapshots, fireTarget, allTimeMonthlyChange);
   const lastYear = rangeEstimate(snapshots, fireTarget, 'lastYear', '近一年速度', 12);
   const allTime = rangeEstimate(snapshots, fireTarget, 'allTime', '历史以来速度');
-  return [latest, lastYear, allTime];
+  return [lastMonth, lastYear, allTime];
 }
 
-function latestIntervalEstimate(snapshots: AssetSnapshot[], fireTarget: number, allTimeMonthlyChange: number | null): FireSpeedEstimate {
-  if (snapshots.length < 2) return emptySpeedEstimate('latest', '最近一次更新');
-  const previous = snapshots[snapshots.length - 2];
+// 登记日期不固定：起点取至少一个月前的最近一期，保证跨度不短于一个月；
+// 窗口里的发薪次数未必和天数成比例，所以累加收入摊平后的日均变化。
+function lastMonthEstimate(snapshots: AssetSnapshot[], fireTarget: number, allTimeMonthlyChange: number | null): FireSpeedEstimate {
+  const label = '最近一个月速度';
+  if (snapshots.length < 2) return emptySpeedEstimate('lastMonth', label);
   const latest = snapshots[snapshots.length - 1];
-  const months = Math.max(1, monthDiff(previous.date, latest.date));
-  const monthlyChange = (latest.computedTotalCny - previous.computedTotalCny) / months;
-  return createSpeedEstimate('latest', '最近一次更新', previous.date, latest.date, months, monthlyChange, fireTarget, latest.computedTotalCny, snapshots.length, allTimeMonthlyChange);
+  const threshold = monthsBefore(latest.date, 1);
+  const start = [...snapshots].reverse().find((snapshot) => new Date(`${snapshot.date}T00:00:00`) <= threshold) ?? snapshots[0];
+  const months = monthsBetween(start.date, latest.date);
+  if (months <= 0) return emptySpeedEstimate('lastMonth', label, '区间内只有一个日期的快照，无法计算速度。');
+  const windowRows = snapshotIntervalRows(snapshots).filter((row) => row.startDate >= start.date && row.endDate <= latest.date);
+  const amortizedChange = windowRows.length > 0 && windowRows.every((row) => row.amortizedDailyChange !== null)
+    ? windowRows.reduce((sum, row) => sum + (row.amortizedDailyChange ?? 0) * row.days, 0)
+    : null;
+  const monthlyChange = (amortizedChange ?? latest.computedTotalCny - start.computedTotalCny) / months;
+  return createSpeedEstimate('lastMonth', label, start.date, latest.date, months, monthlyChange, fireTarget, latest.computedTotalCny, snapshots.length, allTimeMonthlyChange, amortizedChange !== null);
 }
 
 function rangeEstimate(snapshots: AssetSnapshot[], fireTarget: number, key: 'lastYear' | 'allTime', label: string, maxMonths?: number): FireSpeedEstimate {
   if (snapshots.length < 2) return emptySpeedEstimate(key, label);
   const latest = snapshots[snapshots.length - 1];
   const start = maxMonths === undefined ? snapshots[0] : findStartWithinMonths(snapshots, latest.date, maxMonths);
-  const months = Math.max(1, monthDiff(start.date, latest.date));
+  const months = monthsBetween(start.date, latest.date);
+  if (months <= 0) return emptySpeedEstimate(key, label, '区间内只有一个日期的快照，无法计算速度。');
   const monthlyChange = (latest.computedTotalCny - start.computedTotalCny) / months;
-  return createSpeedEstimate(key, label, start.date, latest.date, months, monthlyChange, fireTarget, latest.computedTotalCny, snapshots.length, null);
+  return createSpeedEstimate(key, label, start.date, latest.date, months, monthlyChange, fireTarget, latest.computedTotalCny, snapshots.length, null, false);
 }
 
-function emptySpeedEstimate(key: FireSpeedEstimate['key'], label: string): FireSpeedEstimate {
-  return { key, label, monthlyChange: null, projectedMonthsToFire: null, startDate: null, endDate: null, months: null, confidenceLabel: '样本不足', note: '至少需要两期快照。' };
+function emptySpeedEstimate(key: FireSpeedEstimate['key'], label: string, note = '至少需要两期快照。'): FireSpeedEstimate {
+  return { key, label, monthlyChange: null, projectedMonthsToFire: null, startDate: null, endDate: null, months: null, incomeAmortized: false, confidenceLabel: '样本不足', note };
 }
 
-function createSpeedEstimate(key: FireSpeedEstimate['key'], label: string, startDate: string, endDate: string, months: number, monthlyChange: number, fireTarget: number, currentNetWorth: number, snapshotCount: number, allTimeMonthlyChange: number | null): FireSpeedEstimate {
+function createSpeedEstimate(key: FireSpeedEstimate['key'], label: string, startDate: string, endDate: string, months: number, monthlyChange: number, fireTarget: number, currentNetWorth: number, snapshotCount: number, allTimeMonthlyChange: number | null, incomeAmortized: boolean): FireSpeedEstimate {
   const confidence = speedConfidence(key, months, monthlyChange, snapshotCount, allTimeMonthlyChange);
   return {
     key,
@@ -209,24 +221,34 @@ function createSpeedEstimate(key: FireSpeedEstimate['key'], label: string, start
     startDate,
     endDate,
     months,
+    incomeAmortized,
     ...confidence,
   };
 }
 
 function speedConfidence(key: FireSpeedEstimate['key'], months: number, monthlyChange: number, snapshotCount: number, allTimeMonthlyChange: number | null): Pick<FireSpeedEstimate, 'confidenceLabel' | 'note'> {
   if (monthlyChange <= 0) return { confidenceLabel: '无法外推', note: '当前速度无法外推到 FIRE。' };
-  if (key === 'latest' && snapshotCount >= 3 && allTimeMonthlyChange !== null && Math.abs(monthlyChange) > Math.abs(allTimeMonthlyChange) * 2) {
-    return { confidenceLabel: '波动较大', note: '最近一次变化可能受单次大额波动影响。' };
+  if (key === 'lastMonth' && snapshotCount >= 3 && allTimeMonthlyChange !== null && Math.abs(monthlyChange) > Math.abs(allTimeMonthlyChange) * 2) {
+    return { confidenceLabel: '波动较大', note: '最近一个月的变化可能受单次大额波动影响。' };
   }
   if (months < 3) return { confidenceLabel: '样本不足', note: '样本跨度少于 3 个月。' };
   return { confidenceLabel: '可参考', note: '仍需结合市场波动和主动投入理解。' };
 }
 
 function findStartWithinMonths(snapshots: AssetSnapshot[], latestDate: string, months: number): AssetSnapshot {
-  const latest = new Date(`${latestDate}T00:00:00`);
-  const threshold = new Date(latest);
-  threshold.setMonth(threshold.getMonth() - months);
+  const threshold = monthsBefore(latestDate, months);
   return snapshots.find((snapshot) => new Date(`${snapshot.date}T00:00:00`) >= threshold) ?? snapshots[0];
+}
+
+// 月末日期往前推时贴到目标月的最后一天，避免 3/31 往前一个月变成 3/3。
+function monthsBefore(date: string, months: number): Date {
+  const result = new Date(`${date}T00:00:00`);
+  const day = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() - months);
+  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(day, lastDay));
+  return result;
 }
 
 function monthsToFire(fireTarget: number, currentNetWorth: number, monthlyChange: number): number | null {
@@ -248,12 +270,10 @@ function averageMonthlyGrowth(snapshots: AssetSnapshot[]): number | null {
   if (snapshots.length < 2) return null;
   const first = snapshots[0];
   const last = snapshots[snapshots.length - 1];
-  const months = Math.max(1, monthDiff(first.date, last.date));
-  return (last.computedTotalCny - first.computedTotalCny) / months;
+  const months = monthsBetween(first.date, last.date);
+  return months > 0 ? (last.computedTotalCny - first.computedTotalCny) / months : null;
 }
 
-function monthDiff(start: string, end: string): number {
-  const startDate = new Date(`${start}T00:00:00`);
-  const endDate = new Date(`${end}T00:00:00`);
-  return (endDate.getFullYear() - startDate.getFullYear()) * 12 + endDate.getMonth() - startDate.getMonth();
+function monthsBetween(start: string, end: string): number {
+  return daysBetween(start, end) / DAYS_PER_MONTH;
 }

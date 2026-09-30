@@ -41,6 +41,11 @@ export function intervalExternalIncome(snapshots: AssetSnapshot[], selected: Ass
   return { amount: earlier.some(hasRecordedExternalIncome) ? 0 : null, recorded: false };
 }
 
+export function intervalExternalIncomeLabel(income: IntervalExternalIncome, date: string, today = new Date()): string | null {
+  if (income.recorded) return externalIncomeDateLabel({ amount: income.amount, sourceDate: date, inherited: false }, today);
+  return income.amount === null ? null : '本期未填，按 0 计';
+}
+
 export function daysSinceDate(date: string, today = new Date()): number | null {
   const time = new Date(`${date}T00:00:00`).getTime();
   if (!Number.isFinite(time)) return null;

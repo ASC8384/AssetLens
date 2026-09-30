@@ -4,7 +4,7 @@ import { accountChanges, categoryTotals, totalChange, venueTotals } from '../lib
 import { accountInsightSummary, accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext, unclassifiedSummary } from '../lib/dashboard';
 import { assetCategories, categories, categoryColors, venueColors, venues } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
-import { externalIncomeDateLabel } from '../lib/income';
+import { intervalExternalIncomeLabel } from '../lib/income';
 import { analyzeStrategy } from '../lib/strategy';
 import { calendarMonthRange, snapshotDateLabel } from '../lib/dates';
 import type { DailyNetChangeRow } from '../lib/dashboard';
@@ -39,9 +39,7 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
   const strategy = analyzeStrategy(selected, data.strategy);
   const cashflow = periodCashflow(previous, selected, snapshots);
   const ratioBase = selected.computedGrossAssetsCny;
-  const incomeStatus = cashflow.externalIncomeRecorded
-    ? externalIncomeDateLabel({ amount: cashflow.externalIncome, sourceDate: selected.date, inherited: false })
-    : cashflow.externalIncome === null ? null : '本期未填，按 0 计';
+  const incomeStatus = intervalExternalIncomeLabel({ amount: cashflow.externalIncome, recorded: cashflow.externalIncomeRecorded }, selected.date);
   const incomeHint = incomeStatus
     ? (selected.note ? `${incomeStatus} · ${selected.note}` : incomeStatus)
     : '尚未记录外界收入';

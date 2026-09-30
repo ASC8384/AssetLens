@@ -123,14 +123,14 @@ export function FireView({ data, onChange }: { data: AppData; onChange: (data: A
               <div key={estimate.key} className="speed-estimate-row">
                 <span>{estimate.label}</span>
                 <strong>{formatMonths(estimate.projectedMonthsToFire)}</strong>
-                <small>月均变化 {formatMoney(estimate.monthlyChange)}</small>
-                <small>{estimate.startDate && estimate.endDate ? `${estimate.startDate} → ${estimate.endDate}` : '等待更多快照'}{estimate.months !== null ? ` · 约 ${estimate.months} 个月` : ''}</small>
+                <small>月均变化 {formatMoney(estimate.monthlyChange)}{estimate.incomeAmortized ? '（外界收入已按天摊平）' : ''}</small>
+                <small>{estimate.startDate && estimate.endDate ? `${estimate.startDate} → ${estimate.endDate}` : '等待更多快照'}{estimate.months !== null ? ` · 约 ${formatNumber(estimate.months, 1)} 个月` : ''}</small>
                 <small>可信度 <span className="confidence-pill">{estimate.confidenceLabel}</span></small>
                 <small>{estimate.note}</small>
               </div>
             ))}
           </div>
-          <p className="muted">仅按资产快照变化外推，可能受市场波动、奖金、大额支出和收入变化影响。</p>
+          <p className="muted">按资产快照变化外推，月数按实际天数折算；最近一个月速度从至少一个月前的最近一期算起，并把外界收入按天摊平，避免发薪日落点造成忽高忽低。仍可能受市场波动、奖金、大额支出和收入变化影响。</p>
         </section>
 
         <section className="chart-card fire-sensitivity-card">
