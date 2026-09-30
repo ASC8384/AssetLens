@@ -4,7 +4,7 @@ import { accountChanges, categoryTotals, totalChange, venueTotals } from '../lib
 import { accountInsightSummary, accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext, unclassifiedSummary } from '../lib/dashboard';
 import { assetCategories, categories, categoryColors, venueColors, venues } from '../lib/defaults';
 import { formatMoney, formatPercent } from '../lib/format';
-import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
+import { externalIncomeDateLabel } from '../lib/income';
 import { analyzeStrategy } from '../lib/strategy';
 import { calendarMonthRange, snapshotDateLabel } from '../lib/dates';
 import type { DailyNetChangeRow } from '../lib/dashboard';
@@ -39,9 +39,11 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
   const strategy = analyzeStrategy(selected, data.strategy);
   const cashflow = periodCashflow(previous, selected, snapshots);
   const ratioBase = selected.computedGrossAssetsCny;
-  const incomeDateHint = externalIncomeDateLabel(resolveExternalIncome(snapshots, selected));
-  const incomeHint = incomeDateHint
-    ? (selected.note ? `${incomeDateHint} · ${selected.note}` : incomeDateHint)
+  const incomeStatus = cashflow.externalIncomeRecorded
+    ? externalIncomeDateLabel({ amount: cashflow.externalIncome, sourceDate: selected.date, inherited: false })
+    : cashflow.externalIncome === null ? null : '本期未填，按 0 计';
+  const incomeHint = incomeStatus
+    ? (selected.note ? `${incomeStatus} · ${selected.note}` : incomeStatus)
     : '尚未记录外界收入';
 
   return (
@@ -169,6 +171,7 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
               <Legend />
               <ReferenceLine y={0} stroke="#98a2b3" strokeDasharray="4 4" />
               <Line type="monotone" dataKey="dailyChange" name="日均净增" stroke="#2266ff" strokeWidth={3} dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="amortizedDailyChange" name="收入摊平后日均" stroke="#d9822b" strokeWidth={2} dot={{ r: 3 }} />
               <Line type="monotone" dataKey="afterIncomeDailyChange" name="扣除外界收入后日均" stroke="#12b8a6" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
@@ -402,8 +405,9 @@ function DailyNetChangeTooltip({ active, payload }: { active?: boolean; payload?
       <span>{row.days} 天</span>
       <span>总变化：{formatMoney(row.totalChange)}</span>
       <span>日均净增：{formatMoney(row.dailyChange)}</span>
-      <span>外界收入：{row.externalIncome === null ? '未记录' : formatMoney(row.externalIncome)}{row.externalIncomeInherited ? `（沿用 ${row.externalIncomeSourceDate}）` : ''}</span>
+      <span>外界收入：{row.externalIncome === null ? '尚未开始记录' : formatMoney(row.externalIncome)}{row.externalIncome !== null && !row.externalIncomeRecorded ? '（本期未填）' : ''}</span>
       <span>扣除外界收入后日均：{formatMoney(row.afterIncomeDailyChange)}</span>
+      <span>收入摊平后日均：{formatMoney(row.amortizedDailyChange)}{row.amortizedDailyIncome === null ? '' : `（每日收入 ${formatMoney(row.amortizedDailyIncome)}）`}</span>
     </div>
   );
 }

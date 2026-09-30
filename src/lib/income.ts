@@ -28,6 +28,19 @@ export function resolveExternalIncome(snapshots: AssetSnapshot[], selected: Asse
   return { amount: null, sourceDate: null, inherited: false };
 }
 
+export type IntervalExternalIncome = {
+  amount: number | null;
+  recorded: boolean;
+};
+
+// 外界收入是上一期到这一期之间实际到账的钱：开始填写之后，某期没填就表示这段时间没有收入。
+export function intervalExternalIncome(snapshots: AssetSnapshot[], selected: AssetSnapshot): IntervalExternalIncome {
+  if (hasRecordedExternalIncome(selected)) return { amount: selected.externalIncome ?? null, recorded: true };
+  const selectedIndex = snapshots.findIndex((snapshot) => snapshot.id === selected.id);
+  const earlier = selectedIndex === -1 ? snapshots : snapshots.slice(0, selectedIndex);
+  return { amount: earlier.some(hasRecordedExternalIncome) ? 0 : null, recorded: false };
+}
+
 export function daysSinceDate(date: string, today = new Date()): number | null {
   const time = new Date(`${date}T00:00:00`).getTime();
   if (!Number.isFinite(time)) return null;

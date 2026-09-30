@@ -306,18 +306,19 @@ describe('dailyNetChangeRows', () => {
     };
 
     expect(dailyNetChangeRows(data)).toEqual([
-      { startDate: '2026-01-01', endDate: '2026-01-11', days: 10, totalChange: 100, dailyChange: 10, externalIncome: null, externalIncomeSourceDate: null, externalIncomeInherited: false, afterIncomeDailyChange: null },
-      { startDate: '2026-01-11', endDate: '2026-01-21', days: 10, totalChange: -50, dailyChange: -5, externalIncome: null, externalIncomeSourceDate: null, externalIncomeInherited: false, afterIncomeDailyChange: null },
+      { startDate: '2026-01-01', endDate: '2026-01-11', days: 10, totalChange: 100, dailyChange: 10, externalIncome: null, externalIncomeRecorded: false, afterIncomeDailyChange: null, amortizedDailyIncome: null, amortizedDailyChange: null },
+      { startDate: '2026-01-11', endDate: '2026-01-21', days: 10, totalChange: -50, dailyChange: -5, externalIncome: null, externalIncomeRecorded: false, afterIncomeDailyChange: null, amortizedDailyIncome: null, amortizedDailyChange: null },
     ]);
   });
 
-  it('subtracts external income from the daily change and inherits the latest recorded income', () => {
+  it('treats unfilled income as zero once recording starts and spreads each income since the previous one', () => {
     const data: AppData = {
       version: 1,
       snapshots: [
-        snapshot('2026-01-01', 100, 40),
-        { ...snapshot('2026-01-11', 220, 20), externalIncome: 60 },
-        snapshot('2026-01-21', 170, 20),
+        { ...snapshot('2026-01-01', 100, 40), externalIncome: 30 },
+        snapshot('2026-01-11', 220, 20),
+        { ...snapshot('2026-01-21', 170, 20), externalIncome: 60 },
+        snapshot('2026-01-31', 200, 20),
       ],
       accounts: [],
       defaultExchangeRates: { CNY: 1 },
@@ -327,8 +328,9 @@ describe('dailyNetChangeRows', () => {
     };
 
     expect(dailyNetChangeRows(data)).toEqual([
-      expect.objectContaining({ endDate: '2026-01-11', dailyChange: 10, externalIncome: 60, externalIncomeSourceDate: '2026-01-11', externalIncomeInherited: false, afterIncomeDailyChange: 4 }),
-      expect.objectContaining({ endDate: '2026-01-21', dailyChange: -5, externalIncome: 60, externalIncomeSourceDate: '2026-01-11', externalIncomeInherited: true, afterIncomeDailyChange: -11 }),
+      expect.objectContaining({ endDate: '2026-01-11', dailyChange: 10, externalIncome: 0, externalIncomeRecorded: false, afterIncomeDailyChange: 10, amortizedDailyIncome: 3, amortizedDailyChange: 13 }),
+      expect.objectContaining({ endDate: '2026-01-21', dailyChange: -5, externalIncome: 60, externalIncomeRecorded: true, afterIncomeDailyChange: -11, amortizedDailyIncome: 3, amortizedDailyChange: -8 }),
+      expect.objectContaining({ endDate: '2026-01-31', dailyChange: 3, externalIncome: 0, externalIncomeRecorded: false, afterIncomeDailyChange: 3, amortizedDailyIncome: 3, amortizedDailyChange: 6 }),
     ]);
   });
 
@@ -357,22 +359,32 @@ describe('periodCashflow', () => {
     expect(periodCashflow(previous, selected, [previous, selected])).toEqual({
       netChange: 60,
       externalIncome: 50,
-      externalIncomeSourceDate: '2026-02-01',
-      externalIncomeInherited: false,
+      externalIncomeRecorded: true,
       afterIncomeChange: 10,
     });
   });
 
-  it('carries the last recorded external income when the selected snapshot has none', () => {
+  it('counts an unfilled period as zero income once income has been recorded before', () => {
     const previous = { ...snapshot('2026-01-01', 100, 40), externalIncome: 50 };
     const selected = snapshot('2026-02-01', 120, 80);
 
     expect(periodCashflow(previous, selected, [previous, selected])).toEqual({
       netChange: 60,
-      externalIncome: 50,
-      externalIncomeSourceDate: '2026-01-01',
-      externalIncomeInherited: true,
-      afterIncomeChange: 10,
+      externalIncome: 0,
+      externalIncomeRecorded: false,
+      afterIncomeChange: 60,
+    });
+  });
+
+  it('leaves income unknown before any income has been recorded', () => {
+    const previous = snapshot('2026-01-01', 100, 40);
+    const selected = snapshot('2026-02-01', 120, 80);
+
+    expect(periodCashflow(previous, selected, [previous, selected])).toEqual({
+      netChange: 60,
+      externalIncome: null,
+      externalIncomeRecorded: false,
+      afterIncomeChange: null,
     });
   });
 });

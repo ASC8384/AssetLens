@@ -72,7 +72,7 @@ describe('Dashboard', () => {
     expect(screen.getByRole('button', { name: '2026-02-01 · 同日第 2 条' })).toBeTruthy();
   });
 
-  it('reuses the last recorded external income and marks its date', () => {
+  it('counts an unfilled period as zero income after income recording starts', () => {
     const data = {
       ...createSampleData(),
       snapshots: [
@@ -83,8 +83,9 @@ describe('Dashboard', () => {
 
     render(<Dashboard data={data} />);
 
-    expect(screen.getAllByText(/沿用 2026-01-01/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('¥8,000.00').length).toBeGreaterThan(0);
+    expect(screen.getByText('本期未填，按 0 计')).toBeTruthy();
+    expect(screen.getAllByText('¥0.00').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/沿用 2026-01-01/)).toBeNull();
   });
 
   it('navigates between snapshots without leaving the latest-follow mode until a period is chosen', () => {
