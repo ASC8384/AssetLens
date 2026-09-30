@@ -6,6 +6,8 @@ import { defaultExchangeRates } from '../lib/defaults';
 import { snapshotsOnDate } from '../lib/snapshotDates';
 import type { AppData } from '../lib/types';
 
+const sampleSnapshotCount = createSampleData().snapshots.length;
+
 function analysisData(): AppData {
   const data = createSampleData();
   return { ...data, preferences: { ...data.preferences, detailMode: 'analysis' } };
@@ -87,7 +89,7 @@ describe('DetailsTable', () => {
     fireEvent.click(screen.getByRole('button', { name: '保留同日记录' }));
     const updatedData = onChange.mock.calls[0][0] as AppData;
     expect(snapshotsOnDate(updatedData.snapshots, '2026-04-01')).toHaveLength(2);
-    expect(updatedData.snapshots).toHaveLength(3);
+    expect(updatedData.snapshots).toHaveLength(sampleSnapshotCount);
   });
 
   it('can overwrite or cancel when copying onto an existing date', () => {
@@ -101,14 +103,14 @@ describe('DetailsTable', () => {
     expect((within(dialog).getByLabelText('快照日期') as HTMLInputElement).value).toBe('2026-05-20');
 
     fireEvent.click(within(dialog).getByRole('button', { name: '复制' }));
-    expect(onChange.mock.calls[0][0].snapshots).toHaveLength(4);
+    expect(onChange.mock.calls[0][0].snapshots).toHaveLength(sampleSnapshotCount + 1);
 
     fireEvent.click(screen.getByLabelText('复制 2026-05-01'));
     fireEvent.change(screen.getByLabelText('快照日期'), { target: { value: '2026-04-01' } });
     fireEvent.click(screen.getByRole('button', { name: '覆盖已有记录' }));
 
     const overwritten = onChange.mock.calls[1][0] as AppData;
-    expect(overwritten.snapshots).toHaveLength(3);
+    expect(overwritten.snapshots).toHaveLength(sampleSnapshotCount);
     expect(snapshotsOnDate(overwritten.snapshots, '2026-04-01')).toHaveLength(1);
 
     fireEvent.click(screen.getByLabelText('复制 2026-03-01'));

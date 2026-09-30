@@ -6,6 +6,8 @@ import { createEmptyAppData } from '../lib/defaults';
 import { snapshotsOnDate } from '../lib/snapshotDates';
 import type { AppData } from '../lib/types';
 
+const sampleSnapshotCount = createSampleData().snapshots.length;
+
 describe('ImportCenter manual snapshot flow', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -25,8 +27,18 @@ describe('ImportCenter manual snapshot flow', () => {
     expect((screen.getByLabelText('日期') as HTMLInputElement).value).toBe('2026-05-20');
     expect((screen.getByLabelText('场外基金A') as HTMLInputElement).value).toBe('59000');
     expect((screen.getByLabelText('活期账户A') as HTMLInputElement).value).toBe('10000');
-    expect((screen.getByLabelText('外界收入') as HTMLInputElement).value).toBe('12000');
-    expect(screen.getByText(/沿用 2026-05-01/)).toBeTruthy();
+    expect((screen.getByLabelText('外界收入') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('外界收入') as HTMLInputElement).placeholder).toBe('上次 ¥12,000.00（2026-05-01）');
+  });
+
+  it('keeps typed external income when switching manual source', () => {
+    render(<ImportCenter data={createSampleData()} onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('开始手动输入'));
+    fireEvent.change(screen.getByLabelText('外界收入'), { target: { value: '9000' } });
+    fireEvent.change(screen.getByLabelText('复制来源'), { target: { value: 'blank' } });
+
+    expect((screen.getByLabelText('外界收入') as HTMLInputElement).value).toBe('9000');
   });
 
   it('saves a manual snapshot through onChange', () => {
@@ -123,7 +135,7 @@ describe('ImportCenter manual snapshot flow', () => {
     fireEvent.click(screen.getByRole('button', { name: '覆盖已有记录' }));
 
     const overwritten = overwrite.mock.calls[0][0] as AppData;
-    expect(overwritten.snapshots).toHaveLength(3);
+    expect(overwritten.snapshots).toHaveLength(sampleSnapshotCount);
     expect(snapshotsOnDate(overwritten.snapshots, '2026-05-01')).toHaveLength(1);
     unmount();
 
@@ -135,7 +147,7 @@ describe('ImportCenter manual snapshot flow', () => {
     fireEvent.click(screen.getByRole('button', { name: '保留同日记录' }));
 
     const kept = keep.mock.calls[0][0] as AppData;
-    expect(kept.snapshots).toHaveLength(4);
+    expect(kept.snapshots).toHaveLength(sampleSnapshotCount + 1);
     expect(snapshotsOnDate(kept.snapshots, '2026-05-01')).toHaveLength(2);
   });
 

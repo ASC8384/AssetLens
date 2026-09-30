@@ -14,10 +14,10 @@ describe('ReviewReport', () => {
     render(<ReviewReport data={createSampleData()} />);
 
     expect((screen.getByLabelText('开始') as HTMLInputElement).type).toBe('date');
-    expect((screen.getByLabelText('开始') as HTMLInputElement).value).toBe('2026-03-01');
+    expect((screen.getByLabelText('开始') as HTMLInputElement).value).toBe('2026-01-01');
     expect((screen.getByLabelText('结束') as HTMLInputElement).value).toBe('2026-05-01');
     expect(screen.getByRole('button', { name: '全部' }).className).toContain('active');
-    expect(screen.getByText(/已选 2026-03-01 → 2026-05-01 · 3 期快照/)).toBeTruthy();
+    expect(screen.getByText(/已选 2026-01-01 → 2026-05-01 · 5 期快照/)).toBeTruthy();
   });
 
   it('applies a dashboard month request without rewriting it after render', () => {

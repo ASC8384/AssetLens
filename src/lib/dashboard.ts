@@ -283,6 +283,10 @@ export type DailyNetChangeRow = {
   days: number;
   totalChange: number;
   dailyChange: number;
+  externalIncome: number | null;
+  externalIncomeSourceDate: string | null;
+  externalIncomeInherited: boolean;
+  afterIncomeDailyChange: number | null;
 };
 
 export function dailyNetChangeRows(data: AppData): DailyNetChangeRow[] {
@@ -294,12 +298,17 @@ export function dailyNetChangeRows(data: AppData): DailyNetChangeRow[] {
     if (days <= 0 || !Number.isFinite(days)) return [];
 
     const totalChange = snapshot.computedTotalCny - previous.computedTotalCny;
+    const income = resolveExternalIncome(data.snapshots, snapshot);
     return [{
       startDate: previous.date,
       endDate: snapshot.date,
       days,
       totalChange,
       dailyChange: totalChange / days,
+      externalIncome: income.amount,
+      externalIncomeSourceDate: income.sourceDate,
+      externalIncomeInherited: income.inherited,
+      afterIncomeDailyChange: income.amount === null ? null : (totalChange - income.amount) / days,
     }];
   });
 }

@@ -7,6 +7,7 @@ import { formatMoney, formatPercent } from '../lib/format';
 import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
 import { analyzeStrategy } from '../lib/strategy';
 import { calendarMonthRange, snapshotDateLabel } from '../lib/dates';
+import type { DailyNetChangeRow } from '../lib/dashboard';
 import type { ReviewRangeRequest } from '../lib/report';
 import type { AppData } from '../lib/types';
 
@@ -165,8 +166,10 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
               <XAxis dataKey="endDate" />
               <YAxis tickFormatter={(value) => `${Math.round(Number(value))}/日`} />
               <Tooltip content={<DailyNetChangeTooltip />} />
+              <Legend />
               <ReferenceLine y={0} stroke="#98a2b3" strokeDasharray="4 4" />
               <Line type="monotone" dataKey="dailyChange" name="日均净增" stroke="#2266ff" strokeWidth={3} dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="afterIncomeDailyChange" name="扣除外界收入后日均" stroke="#12b8a6" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -386,13 +389,7 @@ function Metric({ title, value, hint, tone }: { title: string; value: string; hi
 }
 
 type TooltipPayload = {
-  payload?: {
-    startDate: string;
-    endDate: string;
-    days: number;
-    totalChange: number;
-    dailyChange: number;
-  };
+  payload?: DailyNetChangeRow;
 };
 
 function DailyNetChangeTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayload[] }) {
@@ -405,6 +402,8 @@ function DailyNetChangeTooltip({ active, payload }: { active?: boolean; payload?
       <span>{row.days} 天</span>
       <span>总变化：{formatMoney(row.totalChange)}</span>
       <span>日均净增：{formatMoney(row.dailyChange)}</span>
+      <span>外界收入：{row.externalIncome === null ? '未记录' : formatMoney(row.externalIncome)}{row.externalIncomeInherited ? `（沿用 ${row.externalIncomeSourceDate}）` : ''}</span>
+      <span>扣除外界收入后日均：{formatMoney(row.afterIncomeDailyChange)}</span>
     </div>
   );
 }

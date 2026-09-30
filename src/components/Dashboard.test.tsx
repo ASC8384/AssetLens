@@ -107,10 +107,10 @@ describe('Dashboard', () => {
   it('lets the user pick a snapshot from the wrapped date list', () => {
     render(<Dashboard data={createSampleData()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '2026-03-01' }));
+    fireEvent.click(screen.getByRole('button', { name: '2026-01-01' }));
 
-    expect(screen.getByText('选中时点 · 2026-03-01')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '2026-03-01' }).className).toContain('active');
+    expect(screen.getByText('选中时点 · 2026-01-01')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2026-01-01' }).className).toContain('active');
     expect((screen.getByRole('button', { name: '上一期' }) as HTMLButtonElement).disabled).toBe(true);
   });
 

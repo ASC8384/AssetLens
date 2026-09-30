@@ -38,7 +38,7 @@ describe('ControlConsole', () => {
     expect(screen.getByRole('button', { name: '展开导入区' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '展开策略' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '展开配置' })).toBeTruthy();
-    expect(screen.getByText('3 期记录')).toBeTruthy();
+    expect(screen.getByText('5 期记录')).toBeTruthy();
     expect(screen.getByText('最近 2026-05-01')).toBeTruthy();
     expect(screen.getByText(`风险资产 ${formatPercent(analysis.riskAssetRatio)}（区间 ${range}）`)).toBeTruthy();
     expect(screen.getByText('偏高')).toBeTruthy();

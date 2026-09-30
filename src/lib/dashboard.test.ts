@@ -306,8 +306,29 @@ describe('dailyNetChangeRows', () => {
     };
 
     expect(dailyNetChangeRows(data)).toEqual([
-      { startDate: '2026-01-01', endDate: '2026-01-11', days: 10, totalChange: 100, dailyChange: 10 },
-      { startDate: '2026-01-11', endDate: '2026-01-21', days: 10, totalChange: -50, dailyChange: -5 },
+      { startDate: '2026-01-01', endDate: '2026-01-11', days: 10, totalChange: 100, dailyChange: 10, externalIncome: null, externalIncomeSourceDate: null, externalIncomeInherited: false, afterIncomeDailyChange: null },
+      { startDate: '2026-01-11', endDate: '2026-01-21', days: 10, totalChange: -50, dailyChange: -5, externalIncome: null, externalIncomeSourceDate: null, externalIncomeInherited: false, afterIncomeDailyChange: null },
+    ]);
+  });
+
+  it('subtracts external income from the daily change and inherits the latest recorded income', () => {
+    const data: AppData = {
+      version: 1,
+      snapshots: [
+        snapshot('2026-01-01', 100, 40),
+        { ...snapshot('2026-01-11', 220, 20), externalIncome: 60 },
+        snapshot('2026-01-21', 170, 20),
+      ],
+      accounts: [],
+      defaultExchangeRates: { CNY: 1 },
+      strategy: { cashReserveTarget: 100, riskAssetMinRatio: 0.2, riskAssetMaxRatio: 0.8, targetCategoryRatios: {} },
+      fire: { monthlyExpense: 10000, withdrawalRate: 0.035, emergencyReserveMonthsTarget: 12, expectedAnnualReturn: 0.04 },
+      preferences: { activeTab: 'dashboard', detailMode: 'compact', detailIssueFilter: 'all', categoryFilter: '全部' },
+    };
+
+    expect(dailyNetChangeRows(data)).toEqual([
+      expect.objectContaining({ endDate: '2026-01-11', dailyChange: 10, externalIncome: 60, externalIncomeSourceDate: '2026-01-11', externalIncomeInherited: false, afterIncomeDailyChange: 4 }),
+      expect.objectContaining({ endDate: '2026-01-21', dailyChange: -5, externalIncome: 60, externalIncomeSourceDate: '2026-01-11', externalIncomeInherited: true, afterIncomeDailyChange: -11 }),
     ]);
   });
 
@@ -323,7 +344,7 @@ describe('dailyNetChangeRows', () => {
     };
 
     expect(dailyNetChangeRows(data)).toEqual([
-      { startDate: '2026-01-01', endDate: '2026-01-11', days: 10, totalChange: 100, dailyChange: 10 },
+      expect.objectContaining({ startDate: '2026-01-01', endDate: '2026-01-11', days: 10, totalChange: 100, dailyChange: 10 }),
     ]);
   });
 });

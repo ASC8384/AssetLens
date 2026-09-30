@@ -3,7 +3,7 @@ import { isLiabilityCategory } from '../lib/calculations';
 import { buildManualSnapshot, buildSnapshotsFromDraft, createImportDraft, mergeImportedData, parseExcelFile, parsePastedTable } from '../lib/importers';
 import { analyzeImportQuality, ignoreTotalColumns } from '../lib/importQuality';
 import { formatMoney, formatPercent } from '../lib/format';
-import { externalIncomeDateLabel, resolveExternalIncome } from '../lib/income';
+import { resolveExternalIncome } from '../lib/income';
 import type { AccountConfig, AppData, DuplicateDateMode, FieldMapping, ImportDraft } from '../lib/types';
 import { categories, venues } from '../lib/defaults';
 import { isIsoDate, todayString } from '../lib/dates';
@@ -17,7 +17,7 @@ type ManualDraft = {
   source: ManualSource;
   amountByAccountId: Record<string, string>;
   externalIncome: string;
-  incomeSourceDate: string | null;
+  incomeHint: string;
   note: string;
 };
 
@@ -56,8 +56,8 @@ function createManualDraft(data: AppData, accounts: AccountConfig[], source: Man
     date: todayString(),
     source,
     amountByAccountId: manualAmountDefaults(data, accounts, source),
-    externalIncome: carried.amount === null ? '' : String(carried.amount),
-    incomeSourceDate: carried.sourceDate,
+    externalIncome: '',
+    incomeHint: carried.amount === null ? '工资等非理财流入' : `上次 ${formatMoney(carried.amount)}（${carried.sourceDate}）`,
     note: '',
   };
 }
@@ -133,6 +133,7 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
     setManualDraft({
       ...next,
       date: manualDraft.date,
+      externalIncome: manualDraft.externalIncome,
       note: manualDraft.note,
     });
   }
@@ -241,8 +242,8 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
           ) : (
             <div className="manual-grid">
               <label>日期<input aria-label="日期" type="date" value={manualDraft.date} onChange={(event) => setManualDraft({ ...manualDraft, date: event.target.value })} /></label>
-              <label>外界收入{manualDraft.incomeSourceDate ? `（${externalIncomeDateLabel({ amount: null, sourceDate: manualDraft.incomeSourceDate, inherited: true })}）` : ''}
-                <input aria-label="外界收入" value={manualDraft.externalIncome} onChange={(event) => setManualDraft({ ...manualDraft, externalIncome: event.target.value, incomeSourceDate: null })} placeholder="工资等非理财流入" />
+              <label>外界收入
+                <input aria-label="外界收入" value={manualDraft.externalIncome} onChange={(event) => setManualDraft({ ...manualDraft, externalIncome: event.target.value })} placeholder={manualDraft.incomeHint} />
               </label>
               <label>备注<input aria-label="备注" value={manualDraft.note} onChange={(event) => setManualDraft({ ...manualDraft, note: event.target.value })} /></label>
               {manualAccountList.map((account) => (
