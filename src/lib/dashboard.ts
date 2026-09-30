@@ -150,17 +150,15 @@ export type AccountInsightSummary = {
   concentrationRatio: number | null;
 };
 
-export function accountInsightSummary(previous: AssetSnapshot | undefined, selected: AssetSnapshot): AccountInsightSummary {
+export function accountInsightSummary(previous: AssetSnapshot | undefined, selected: AssetSnapshot, accounts: AccountConfig[] = []): AccountInsightSummary {
   const previousEntries = new Map(previous?.entries.map((entry) => [entry.accountId, entry]) ?? []);
   const selectedEntries = new Map(selected.entries.map((entry) => [entry.accountId, entry]));
-  const currentTotal = selected.entries
-    .filter((entry) => entry.includedInTotal && !isLiabilityCategory(entry.category))
-    .reduce((sum, entry) => sum + (entry.amountCny ?? 0), 0);
-  const changes = selected.entries
-    .filter((entry) => entry.includedInTotal)
-    .map((entry) => ({ accountName: entry.accountName, change: (entry.amountCny ?? 0) - (previousEntries.get(entry.accountId)?.amountCny ?? 0) }));
-  const selectedAmounts = selected.entries
-    .filter((entry) => entry.includedInTotal && entry.amountCny !== null && !isLiabilityCategory(entry.category))
+  const hiddenIds = hiddenAccountIds(accounts);
+  const visibleAssets = selected.entries.filter((entry) => entry.includedInTotal && !hiddenIds.has(entry.accountId) && !isLiabilityCategory(entry.category));
+  const currentTotal = visibleAssets.reduce((sum, entry) => sum + (entry.amountCny ?? 0), 0);
+  const changes = accountChangeRows(previous, selected, accounts).map((row) => ({ accountName: row.accountName, change: row.impact }));
+  const selectedAmounts = visibleAssets
+    .filter((entry) => entry.amountCny !== null)
     .map((entry) => entry.amountCny ?? 0)
     .sort((a, b) => b - a);
   const topThree = selectedAmounts.slice(0, 3).reduce((sum, value) => sum + value, 0);
@@ -252,23 +250,57 @@ export function periodCashflow(previous: AssetSnapshot | undefined, selected: As
 
 export function categoryTrendData(data: AppData): Array<Record<string, number | string>> {
   return data.snapshots.map((snapshot) => ({
+    id: snapshot.id,
     date: snapshot.date,
     total: snapshot.computedTotalCny,
     ...categoryTotals(snapshot, data.accounts),
   }));
 }
 
-export function accountRankingRows(snapshot: AssetSnapshot): Array<{ accountName: string; amount: number }> {
+export function accountRankingRows(snapshot: AssetSnapshot, accounts: AccountConfig[] = []): Array<{ accountName: string; category: AssetCategory; amount: number }> {
+  const hiddenIds = hiddenAccountIds(accounts);
   return snapshot.entries
-    .filter((entry) => entry.includedInTotal && entry.amountCny !== null)
-    .map((entry) => ({ accountName: entry.accountName, amount: entry.amountCny ?? 0 }))
+    .filter((entry) => entry.includedInTotal && entry.amountCny !== null && !hiddenIds.has(entry.accountId))
+    .map((entry) => ({ accountName: entry.accountName, category: entry.category, amount: entry.amountCny ?? 0 }))
     .sort((a, b) => b.amount - a.amount);
 }
 
-export function riskTrendData(data: AppData): Array<{ date: string; risk: number; safe: number }> {
+export type AccountChangeRow = {
+  accountId: string;
+  accountName: string;
+  category: AssetCategory;
+  /** 账户余额本身的变化。 */
+  change: number;
+  /** 对净资产的影响：负债余额增加会拉低净资产，所以和 change 反号。 */
+  impact: number;
+};
+
+/** 按对净资产影响的绝对值排序；上一期有、这一期消失的账户按清零计入。 */
+export function accountChangeRows(previous: AssetSnapshot | undefined, selected: AssetSnapshot, accounts: AccountConfig[] = []): AccountChangeRow[] {
+  const hiddenIds = hiddenAccountIds(accounts);
+  const countedEntries = (snapshot: AssetSnapshot | undefined) => new Map((snapshot?.entries ?? [])
+    .filter((entry) => entry.includedInTotal && !hiddenIds.has(entry.accountId))
+    .map((entry) => [entry.accountId, entry]));
+  const before = countedEntries(previous);
+  const after = countedEntries(selected);
+  const accountIds = new Set([...after.keys(), ...before.keys()]);
+  return [...accountIds]
+    .map((accountId) => {
+      const current = after.get(accountId);
+      const prior = before.get(accountId);
+      const entry = current ?? prior!;
+      const change = (current?.amountCny ?? 0) - (prior?.amountCny ?? 0);
+      return { accountId, accountName: entry.accountName, category: entry.category, change, impact: isLiabilityCategory(entry.category) ? -change : change };
+    })
+    .filter((row) => row.change !== 0)
+    .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+}
+
+export function riskTrendData(data: AppData): Array<{ id: string; date: string; risk: number; safe: number }> {
   return data.snapshots.map((snapshot) => {
     const totals = categoryTotals(snapshot, data.accounts);
     return {
+      id: snapshot.id,
       date: snapshot.date,
       risk: riskAssetTotal(totals),
       safe: stablePoolTotal(totals),
@@ -282,9 +314,9 @@ export function dailyNetChangeRows(data: AppData): DailyNetChangeRow[] {
   return snapshotIntervalRows(data.snapshots);
 }
 
-export function categoryChangeRows(previous: AssetSnapshot | undefined, selected: AssetSnapshot): Array<{ category: AssetCategory; change: number }> {
-  const previousTotals = previous ? categoryTotals(previous, []) : Object.fromEntries(categories.map((category) => [category, 0])) as Record<AssetCategory, number>;
-  const selectedTotals = categoryTotals(selected, []);
+export function categoryChangeRows(previous: AssetSnapshot | undefined, selected: AssetSnapshot, accounts: AccountConfig[] = []): Array<{ category: AssetCategory; change: number }> {
+  const previousTotals = categoryTotals(previous, accounts);
+  const selectedTotals = categoryTotals(selected, accounts);
   return categories.map((category) => ({
     category,
     change: selectedTotals[category] - previousTotals[category],
@@ -293,4 +325,8 @@ export function categoryChangeRows(previous: AssetSnapshot | undefined, selected
 
 export function hasImportedData(data: AppData): boolean {
   return data.snapshots.length > 0;
+}
+
+function hiddenAccountIds(accounts: AccountConfig[]): Set<string> {
+  return new Set(accounts.filter((account) => account.hidden).map((account) => account.id));
 }

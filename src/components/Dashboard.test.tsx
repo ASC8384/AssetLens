@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { recalculateSnapshot } from '../lib/calculations';
 import type { AssetSnapshot } from '../lib/types';
 import { describe, expect, it, vi } from 'vitest';
@@ -51,7 +51,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('增长账户 Top 5')).toBeTruthy();
     expect(screen.getByText('下降账户 Top 5')).toBeTruthy();
     expect(screen.getByText('账户集中度')).toBeTruthy();
-    expect(screen.getByText('净资产')).toBeTruthy();
+    expect(screen.getAllByText('净资产').length).toBeGreaterThan(0);
     expect(screen.getAllByText('负债').length).toBeGreaterThan(0);
     expect(screen.getAllByText('本期外界收入').length).toBeGreaterThan(0);
   });
@@ -132,6 +132,35 @@ describe('Dashboard', () => {
     expect(screen.getByText('2026 年')).toBeTruthy();
     expect(screen.getByRole('button', { name: '2024-12-01' }).textContent).toContain('12月');
     expect(screen.getByRole('button', { name: '2026-05-01' }).textContent).toContain('5月');
+  });
+
+  it('gives every chart an enlarge button and toggleable legend items', () => {
+    render(<Dashboard data={createSampleData()} />);
+
+    expect(screen.getAllByRole('button', { name: /^放大查看：/ })).toHaveLength(9);
+    const trendLegend = screen.getAllByRole('group', { name: /图例/ })[0];
+    const equity = within(trendLegend).getByRole('button', { name: '权益类' });
+    expect(equity.getAttribute('aria-pressed')).toBe('true');
+    expect(within(trendLegend).queryByRole('button', { name: '未分类' })).toBeNull();
+
+    fireEvent.click(equity);
+    expect(equity.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(screen.getByRole('button', { name: '放大查看：净资产趋势（含分资产）' }));
+    const dialog = screen.getByRole('dialog', { name: '净资产趋势（含分资产）' });
+    expect(within(dialog).getByRole('button', { name: '权益类' }).getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('explains empty comparison charts on the first snapshot instead of drawing blank axes', () => {
+    const data = { ...createSampleData(), snapshots: [snapshot('only', '2026-01-01', 100)] };
+
+    render(<Dashboard data={data} />);
+
+    expect(screen.getAllByText('这是第一期快照，没有上一期可对比。')).toHaveLength(2);
+    expect(screen.getByText('至少需要两期不同日期的快照，才能算区间日均净增。')).toBeTruthy();
   });
 
   it('opens a monthly review for the selected snapshot calendar month', () => {

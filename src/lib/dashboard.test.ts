@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountInsightSummary, accountRankingRows, analyzeDataHealth, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext, unclassifiedSummary } from './dashboard';
+import { accountChangeRows, accountInsightSummary, accountRankingRows, analyzeDataHealth, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext, unclassifiedSummary } from './dashboard';
 import { resolveExternalIncome } from './income';
 import { recalculateSnapshot } from './calculations';
 import type { AppData, AssetSnapshot } from './types';
@@ -241,9 +241,46 @@ describe('dashboard chart helpers', () => {
     const current = snapshot('2026-02-01', 120, 60);
 
     expect(accountRankingRows(current)).toEqual([
-      { accountName: '基金账户', amount: 120 },
-      { accountName: '现金账户', amount: 60 },
+      { accountName: '基金账户', category: '权益类', amount: 120 },
+      { accountName: '现金账户', category: '纯现金', amount: 60 },
     ]);
+  });
+
+  it('leaves hidden accounts out of the account ranking and category changes', () => {
+    const previous = snapshot('2026-01-01', 100, 40);
+    const current = snapshot('2026-02-01', 120, 60);
+    const accounts = [{ id: 'cash', name: '现金账户', category: '纯现金' as const, venue: '银行' as const, defaultCurrency: 'CNY', includedInTotal: true, hidden: true }];
+
+    expect(accountRankingRows(current, accounts).map((row) => row.accountName)).toEqual(['基金账户']);
+    expect(categoryChangeRows(previous, current, accounts)).toEqual(expect.arrayContaining([
+      { category: '权益类', change: 20 },
+      { category: '纯现金', change: 0 },
+    ]));
+  });
+
+  it('ranks account changes by net-worth impact, flipping liabilities and counting removed accounts', () => {
+    const previous = snapshot('2026-01-01', 100, 40);
+    previous.entries.push({ ...previous.entries[1], accountId: 'card', accountName: '信用卡A', category: '负债', originalAmount: 10, amountCny: 10 });
+    previous.entries.push({ ...previous.entries[1], accountId: 'closed', accountName: '旧账户', originalAmount: 5, amountCny: 5 });
+    const selected = snapshot('2026-02-01', 103, 40);
+    selected.entries.push({ ...selected.entries[1], accountId: 'card', accountName: '信用卡A', category: '负债', originalAmount: 50, amountCny: 50 });
+
+    expect(accountChangeRows(previous, selected)).toEqual([
+      { accountId: 'card', accountName: '信用卡A', category: '负债', change: 40, impact: -40 },
+      { accountId: 'closed', accountName: '旧账户', category: '纯现金', change: -5, impact: -5 },
+      { accountId: 'fund', accountName: '基金账户', category: '权益类', change: 3, impact: 3 },
+    ]);
+  });
+
+  it('treats a growing liability as a decrease in account insights', () => {
+    const previous = snapshot('2026-01-01', 100, 40);
+    previous.entries.push({ ...previous.entries[1], accountId: 'card', accountName: '信用卡A', category: '负债', originalAmount: 10, amountCny: 10 });
+    const selected = snapshot('2026-02-01', 100, 40);
+    selected.entries.push({ ...selected.entries[1], accountId: 'card', accountName: '信用卡A', category: '负债', originalAmount: 30, amountCny: 30 });
+
+    const summary = accountInsightSummary(previous, selected);
+    expect(summary.topIncreases).toEqual([]);
+    expect(summary.topDecreases).toEqual([{ accountName: '信用卡A', change: -20 }]);
   });
 
   it('returns cash versus risk trend rows', () => {

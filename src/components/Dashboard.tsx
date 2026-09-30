@@ -1,15 +1,30 @@
 import { useState } from 'react';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { accountChanges, categoryTotals, totalChange, venueTotals } from '../lib/calculations';
-import { accountInsightSummary, accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext, unclassifiedSummary } from '../lib/dashboard';
+import { Area, AreaChart, Bar, BarChart, Brush, CartesianGrid, Cell, ComposedChart, Label, Line, LineChart, Pie, PieChart, ReferenceLine, Tooltip, XAxis, YAxis, type MouseHandlerDataParam } from 'recharts';
+import { categoryTotals, isLiabilityCategory, totalChange, venueTotals } from '../lib/calculations';
+import { accountChangeRows, accountInsightSummary, accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext, unclassifiedSummary } from '../lib/dashboard';
 import { assetCategories, categories, categoryColors, venueColors, venues } from '../lib/defaults';
-import { formatMoney, formatPercent } from '../lib/format';
+import { formatCompactNumber, formatMoney, formatPercent } from '../lib/format';
 import { intervalExternalIncomeLabel } from '../lib/income';
 import { analyzeStrategy } from '../lib/strategy';
 import { calendarMonthRange, snapshotDateLabel } from '../lib/dates';
+import { ChartCard, type ChartLegendItem } from './ChartCard';
 import type { DailyNetChangeRow } from '../lib/dashboard';
 import type { ReviewRangeRequest } from '../lib/report';
-import type { AppData } from '../lib/types';
+import type { AppData, AssetCategory } from '../lib/types';
+
+const axisTick = { fill: '#667085', fontSize: 12 };
+const gridStroke = 'rgba(16,35,63,.1)';
+const selectedMarkerColor = '#475467';
+const barCursor = { fill: 'rgba(16,35,63,.05)' };
+const chartMargin = { top: 20, right: 16, left: 0, bottom: 0 };
+const barChartMargin = { top: 4, right: 24, left: 4, bottom: 0 };
+
+type DailySeriesKey = 'dailyChange' | 'amortizedDailyChange' | 'afterIncomeDailyChange';
+const dailySeries: Array<ChartLegendItem & { key: DailySeriesKey }> = [
+  { key: 'dailyChange', label: '日均净增', color: '#2266ff' },
+  { key: 'amortizedDailyChange', label: '收入摊平后日均', color: '#d9822b' },
+  { key: 'afterIncomeDailyChange', label: '扣除外界收入后日均', color: '#12b8a6' },
+];
 
 export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpenMonthlyReview?: (range: ReviewRangeRequest) => void }) {
   const snapshots = data.snapshots;
@@ -28,21 +43,60 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
   const venueData = venues.map((venue) => ({ name: venue, value: venueAmounts[venue] })).filter((item) => item.value > 0);
   const unclassified = unclassifiedSummary(selected, data.accounts);
   const trendData = categoryTrendData(data);
-  const topChanges = accountChanges(comparisonSnapshots);
-  const rankingRows = accountRankingRows(selected).slice(0, 8);
+  const rankingRows = accountRankingRows(selected, data.accounts);
   const riskRows = riskTrendData(data);
   const dailyRows = dailyNetChangeRows(data);
-  const categoryChanges = categoryChangeRows(previous, selected).filter((row) => row.change !== 0);
+  const categoryImpactRows = categoryChangeRows(previous, selected, data.accounts)
+    .filter((row) => row.change !== 0)
+    .map((row) => ({ ...row, impact: isLiabilityCategory(row.category) ? -row.change : row.change }));
+  const accountImpactRows = accountChangeRows(previous, selected, data.accounts);
   const comparisonLabel = previous ? `${previous.date} → ${selected.date}` : `${selected.date} 无前一期`;
   const summary = dashboardSummary({ ...data, snapshots: [selected] });
-  const accountInsights = accountInsightSummary(previous, selected);
+  const accountInsights = accountInsightSummary(previous, selected, data.accounts);
   const strategy = analyzeStrategy(selected, data.strategy);
   const cashflow = periodCashflow(previous, selected, snapshots);
   const ratioBase = selected.computedGrossAssetsCny;
+  const shareOfAssets = (value: number) => formatPercent(ratioBase === 0 ? null : value / ratioBase);
   const incomeStatus = intervalExternalIncomeLabel({ amount: cashflow.externalIncome, recorded: cashflow.externalIncomeRecorded }, selected.date);
   const incomeHint = incomeStatus
     ? (selected.note ? `${incomeStatus} · ${selected.note}` : incomeStatus)
     : '尚未记录外界收入';
+
+  const snapshotById = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot]));
+  const snapshotAxisDate = (id: unknown) => snapshotById.get(String(id))?.date ?? String(id);
+  const snapshotTooltipLabel = (id: unknown) => {
+    const snapshot = snapshotById.get(String(id));
+    return snapshot ? snapshotDateLabel(snapshots, snapshot) : String(id);
+  };
+  const selectSnapshotFromChart = (state: MouseHandlerDataParam) => {
+    const id = String(state.activeLabel ?? '');
+    if (snapshotById.has(id)) setSelectedSnapshotId(id);
+  };
+  const hasValue = (key: string) => trendData.some((row) => Number(row[key] ?? 0) !== 0);
+  const trendLegend: ChartLegendItem[] = [
+    { key: 'total', label: '净资产', color: '#10233f' },
+    ...categories.filter(hasValue).map((category) => ({ key: category, label: category, color: categoryColors[category] })),
+  ];
+  const stackLegend: ChartLegendItem[] = assetCategories.filter(hasValue).map((category) => ({ key: category, label: category, color: categoryColors[category] }));
+  const riskLegend: ChartLegendItem[] = [
+    { key: 'safe', label: '纯现金 + 稳健类', color: '#12b8a6' },
+    { key: 'risk', label: '权益类', color: categoryColors['权益类'] },
+  ];
+  const dailyLegend = dailySeries.filter((series) => dailyRows.some((row) => row[series.key] !== null));
+  const categoryLegend: ChartLegendItem[] = categoryData.map((item) => ({ key: item.name, label: item.name, color: categoryColors[item.name], detail: shareOfAssets(item.value) }));
+  const venueLegend: ChartLegendItem[] = venueData.map((item) => ({ key: item.name, label: item.name, color: venueColors[item.name], detail: shareOfAssets(item.value) }));
+  const categoryImpactLegend: ChartLegendItem[] = categoryImpactRows.map((row) => ({ key: row.category, label: row.category, color: categoryColors[row.category], detail: signedCompact(row.impact) }));
+  const selectedHasInterval = dailyRows.some((row) => row.endDate === selected.date);
+  const timeSeriesHint = '拖动底部滑块可只看一段时间，点图上任一日期可切换查看时点';
+  const noPreviousMessage = '这是第一期快照，没有上一期可对比。';
+  const selectedMarker = (x: string) => (
+    <ReferenceLine x={x} stroke={selectedMarkerColor} strokeDasharray="4 4" label={{ value: '选中', position: 'top', fill: selectedMarkerColor, fontSize: 12 }} />
+  );
+  const timeAxis = <XAxis dataKey="id" tickFormatter={snapshotAxisDate} tick={axisTick} tickMargin={8} minTickGap={18} />;
+  const moneyAxis = <YAxis tickFormatter={axisMoney} tick={axisTick} width={56} axisLine={false} tickLine={false} />;
+  const brush = (expanded: boolean, rowCount: number, dataKey: 'date' | 'endDate') => (expanded && rowCount > 2
+    ? <Brush dataKey={dataKey} height={28} travellerWidth={10} stroke="#10233f" fill="rgba(255,255,255,.7)" />
+    : null);
 
   return (
     <section className="dashboard">
@@ -125,98 +179,191 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
         <div><span>扣除收入后变化</span><strong className={(cashflow.afterIncomeChange ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(cashflow.afterIncomeChange)}</strong><small>剩余部分含理财与支出</small></div>
       </div>
 
+      <p className="chart-section-hint">点图例可暂时隐藏对应项目，再点一次恢复；点图表右上角「放大」看大图。趋势图上点任一日期可切换查看时点。</p>
+
       <div className="chart-grid main-charts dashboard-feature-grid">
-        <ChartCard title="净资产趋势（含分资产）" className="feature-chart">
-          <ResponsiveContainer width="100%" height={340}>
-            <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
-              <Tooltip formatter={(value) => formatMoney(Number(value))} />
-              <Legend />
-              <Line type="monotone" dataKey="total" name="净资产" stroke="#0f172a" strokeWidth={3} dot={{ r: 3 }} />
-              {categories.map((category) => (
-                <Line key={category} type="monotone" dataKey={category} name={category} stroke={categoryColors[category]} strokeWidth={2} dot={false} />
+        <ChartCard title="净资产趋势（含分资产）" className="feature-chart" height={340} legend={trendLegend} expandedHint={timeSeriesHint}>
+          {({ expanded, isVisible }) => (
+            <LineChart data={trendData} margin={chartMargin} onClick={selectSnapshotFromChart} style={{ cursor: 'pointer' }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+              {timeAxis}
+              {moneyAxis}
+              <Tooltip formatter={tooltipMoney} labelFormatter={snapshotTooltipLabel} />
+              {trendLegend.filter((series) => isVisible(series.key)).map((series) => (
+                series.key === 'total'
+                  ? <Line key={series.key} type="monotone" dataKey="total" name="净资产" stroke={series.color} strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  : <Line key={series.key} type="monotone" dataKey={series.key} name={series.label} stroke={series.color} strokeWidth={2} dot={expanded ? { r: 2 } : false} />
               ))}
-              <ReferenceLine x={selected.date} stroke="#d9822b" strokeDasharray="4 4" label="选中" />
+              {selectedMarker(selected.id)}
+              {brush(expanded, trendData.length, 'date')}
             </LineChart>
-          </ResponsiveContainer>
+          )}
         </ChartCard>
 
-        <ChartCard title={`选中时点资产结构 · ${selected.date}`} className="structure-card">
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={92} paddingAngle={4}>
-                {categoryData.map((item) => <Cell key={item.name} fill={categoryColors[item.name as keyof typeof categoryColors]} />)}
-              </Pie>
-              <Tooltip formatter={(value) => formatMoney(Number(value))} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="legend-list">
-            {categoryData.map((item) => <span key={item.name}><i style={{ background: categoryColors[item.name as keyof typeof categoryColors] }} />{item.name} {formatPercent(ratioBase === 0 ? null : item.value / ratioBase)}</span>)}
-          </div>
+        <ChartCard title={`选中时点资产结构 · ${selected.date}`} className="structure-card" height={260} legend={categoryLegend} emptyMessage={categoryData.length === 0 ? '该时点没有正资产。' : undefined}>
+          {({ expanded, isVisible }) => {
+            const visible = categoryData.filter((item) => isVisible(item.name));
+            return (
+              <PieChart>
+                <Pie data={visible} dataKey="value" nameKey="name" innerRadius="56%" outerRadius="82%" paddingAngle={3} label={expanded ? pieSliceLabel : false} labelLine={expanded}>
+                  {visible.map((item) => <Cell key={item.name} fill={categoryColors[item.name]} />)}
+                  <Label position="center" content={<PieCenterLabel caption={visible.length === categoryData.length ? '总资产' : '已选合计'} value={sumValues(visible)} />} />
+                </Pie>
+                <Tooltip formatter={(value, name) => [`${formatMoney(Number(value))} · 占总资产 ${shareOfAssets(Number(value))}`, name]} />
+              </PieChart>
+            );
+          }}
         </ChartCard>
       </div>
 
       <div className="chart-grid tertiary-charts">
-        <ChartCard title="区间日均资产净增">
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={dailyRows} margin={{ left: 8, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="endDate" />
-              <YAxis tickFormatter={(value) => `${Math.round(Number(value))}/日`} />
+        <ChartCard title="区间日均资产净增" height={260} legend={dailyLegend} expandedHint="拖动底部滑块可只看一段时间" emptyMessage={dailyRows.length === 0 ? '至少需要两期不同日期的快照，才能算区间日均净增。' : undefined}>
+          {({ expanded, isVisible }) => (
+            <LineChart data={dailyRows} margin={chartMargin}>
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+              <XAxis dataKey="endDate" tick={axisTick} tickMargin={8} minTickGap={18} />
+              <YAxis tickFormatter={(value) => `${formatCompactNumber(Number(value))}/日`} tick={axisTick} width={64} axisLine={false} tickLine={false} />
               <Tooltip content={<DailyNetChangeTooltip />} />
-              <Legend />
               <ReferenceLine y={0} stroke="#98a2b3" strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="dailyChange" name="日均净增" stroke="#2266ff" strokeWidth={3} dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="amortizedDailyChange" name="收入摊平后日均" stroke="#d9822b" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="afterIncomeDailyChange" name="扣除外界收入后日均" stroke="#12b8a6" strokeWidth={2} dot={{ r: 3 }} />
+              {selectedHasInterval ? selectedMarker(selected.date) : null}
+              {dailyLegend.filter((series) => isVisible(series.key)).map((series) => (
+                <Line key={series.key} type="monotone" dataKey={series.key} name={series.label} stroke={series.color} strokeWidth={series.key === 'dailyChange' ? 3 : 2} dot={{ r: series.key === 'dailyChange' ? 4 : 3 }} />
+              ))}
+              {brush(expanded, dailyRows.length, 'endDate')}
             </LineChart>
-          </ResponsiveContainer>
+          )}
         </ChartCard>
 
-        <ChartCard title="稳健池 vs 权益类趋势">
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={riskRows}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
-              <Tooltip formatter={(value) => formatMoney(Number(value))} />
-              <Legend />
-              <Area type="monotone" dataKey="safe" name="纯现金 + 稳健类" fill="#12b8a6" stroke="#12b8a6" fillOpacity={0.16} />
-              <Line type="monotone" dataKey="risk" name="权益类" stroke="#d9822b" strokeWidth={3} dot={false} />
-              <ReferenceLine x={selected.date} stroke="#d9822b" strokeDasharray="4 4" />
+        <ChartCard title="稳健池 vs 权益类趋势" height={260} legend={riskLegend} expandedHint={timeSeriesHint}>
+          {({ expanded, isVisible }) => (
+            <ComposedChart data={riskRows} margin={chartMargin} onClick={selectSnapshotFromChart} style={{ cursor: 'pointer' }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+              {timeAxis}
+              {moneyAxis}
+              <Tooltip formatter={tooltipMoney} labelFormatter={snapshotTooltipLabel} />
+              {isVisible('safe') ? <Area type="monotone" dataKey="safe" name="纯现金 + 稳健类" fill="#12b8a6" stroke="#12b8a6" fillOpacity={0.16} strokeWidth={2} /> : null}
+              {isVisible('risk') ? <Line type="monotone" dataKey="risk" name="权益类" stroke={categoryColors['权益类']} strokeWidth={3} dot={expanded ? { r: 3 } : false} /> : null}
+              {selectedMarker(selected.id)}
+              {brush(expanded, riskRows.length, 'date')}
             </ComposedChart>
-          </ResponsiveContainer>
+          )}
         </ChartCard>
 
-        <ChartCard title={`选中时点账户排行 · ${selected.date}`}>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={rankingRows} layout="vertical" margin={{ left: 20, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
-              <YAxis type="category" dataKey="accountName" width={92} />
-              <Tooltip formatter={(value) => formatMoney(Number(value))} />
-              <Bar dataKey="amount" name="账户金额" fill="#10233f" />
-            </BarChart>
-          </ResponsiveContainer>
+        <ChartCard
+          title={`选中时点账户排行 · ${selected.date}`}
+          height={260}
+          legend={categoryCountLegend(rankingRows)}
+          expandedHint="显示前 20 个账户，颜色对应大类"
+          emptyMessage={rankingRows.length === 0 ? '该时点没有可排行的账户。' : undefined}
+        >
+          {({ expanded, isVisible }) => {
+            const visible = rankingRows.filter((row) => isVisible(row.category)).slice(0, expanded ? 20 : 8);
+            return (
+              <BarChart data={visible} layout="vertical" margin={barChartMargin}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
+                <XAxis type="number" tickFormatter={axisMoney} tick={axisTick} />
+                <YAxis type="category" dataKey="accountName" width={expanded ? 150 : 96} tick={axisTick} tickFormatter={expanded ? undefined : shortAccountName} interval={0} />
+                <Tooltip content={<AccountAmountTooltip ratioBase={ratioBase} />} cursor={barCursor} />
+                <Bar dataKey="amount" name="账户金额" radius={[0, 6, 6, 0]} maxBarSize={22}>
+                  {visible.map((row, index) => <Cell key={`${row.accountName}-${index}`} fill={categoryColors[row.category]} />)}
+                </Bar>
+              </BarChart>
+            );
+          }}
         </ChartCard>
 
-        <ChartCard title={`大类结构变化 · ${comparisonLabel}`}>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={categoryChanges} margin={{ left: 8, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="category" />
-              <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
-              <Tooltip formatter={(value) => formatMoney(Number(value))} />
-              <Bar dataKey="change" name="变化金额" fill="#2266ff" />
-            </BarChart>
-          </ResponsiveContainer>
+        <ChartCard
+          title={`大类结构变化 · ${comparisonLabel}`}
+          height={260}
+          legend={categoryImpactLegend}
+          emptyMessage={!previous ? noPreviousMessage : categoryImpactRows.length === 0 ? '两期之间各大类金额没有变化。' : undefined}
+          footer={<p className="chart-note">按对净资产的影响计：负债增加显示为负值。</p>}
+        >
+          {({ isVisible }) => {
+            const visible = categoryImpactRows.filter((row) => isVisible(row.category));
+            return (
+              <BarChart data={visible} margin={chartMargin}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                <XAxis dataKey="category" tick={axisTick} tickLine={false} />
+                {moneyAxis}
+                <Tooltip content={<ImpactTooltip />} cursor={barCursor} />
+                <ReferenceLine y={0} stroke="#98a2b3" />
+                <Bar dataKey="impact" name="对净资产的影响" radius={4} maxBarSize={56}>
+                  {visible.map((row) => <Cell key={row.category} fill={categoryColors[row.category]} />)}
+                </Bar>
+              </BarChart>
+            );
+          }}
         </ChartCard>
       </div>
 
       <div className="chart-grid secondary-charts">
-        <ChartCard title="账户洞察" className="account-insight-card">
+        <ChartCard title="大类资产堆叠趋势" height={260} legend={stackLegend} expandedHint={timeSeriesHint} emptyMessage={stackLegend.length === 0 ? '暂无资产数据。' : undefined}>
+          {({ expanded, isVisible }) => (
+            <AreaChart data={trendData} margin={chartMargin} onClick={selectSnapshotFromChart} style={{ cursor: 'pointer' }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+              {timeAxis}
+              {moneyAxis}
+              <Tooltip formatter={tooltipMoney} labelFormatter={snapshotTooltipLabel} />
+              {stackLegend.filter((series) => isVisible(series.key)).map((series) => (
+                <Area key={series.key} type="monotone" dataKey={series.key} name={series.label} stackId="assets" stroke={series.color} fill={series.color} fillOpacity={0.55} />
+              ))}
+              {selectedMarker(selected.id)}
+              {brush(expanded, trendData.length, 'date')}
+            </AreaChart>
+          )}
+        </ChartCard>
+
+        <ChartCard
+          title={`渠道结构 · ${selected.date}`}
+          className="structure-card"
+          height={220}
+          legend={venueLegend}
+          emptyMessage={venueData.length === 0 ? '该时点没有正资产。' : undefined}
+          footer={<p className="chart-note">渠道和风险大类是两条独立的维度：同一渠道里可以有不同风险的资产。</p>}
+        >
+          {({ expanded, isVisible }) => {
+            const visible = venueData.filter((item) => isVisible(item.name));
+            return (
+              <PieChart>
+                <Pie data={visible} dataKey="value" nameKey="name" innerRadius="56%" outerRadius="82%" paddingAngle={3} label={expanded ? pieSliceLabel : false} labelLine={expanded}>
+                  {visible.map((item) => <Cell key={item.name} fill={venueColors[item.name]} />)}
+                  <Label position="center" content={<PieCenterLabel caption={visible.length === venueData.length ? '总资产' : '已选合计'} value={sumValues(visible)} />} />
+                </Pie>
+                <Tooltip formatter={(value, name) => [`${formatMoney(Number(value))} · 占总资产 ${shareOfAssets(Number(value))}`, name]} />
+              </PieChart>
+            );
+          }}
+        </ChartCard>
+
+        <ChartCard
+          title={`账户金额变化 Top 5 · ${comparisonLabel}`}
+          expandedTitle={`账户金额变化 Top 15 · ${comparisonLabel}`}
+          height={260}
+          legend={categoryCountLegend(accountImpactRows)}
+          expandedHint="颜色对应大类"
+          emptyMessage={!previous ? noPreviousMessage : accountImpactRows.length === 0 ? '两期之间账户金额没有变化。' : undefined}
+          footer={<p className="chart-note">按对净资产的影响排序：负债增加显示为负值；上一期有、本期消失的账户按清零计。</p>}
+        >
+          {({ expanded, isVisible }) => {
+            const visible = accountImpactRows.filter((row) => isVisible(row.category)).slice(0, expanded ? 15 : 5);
+            return (
+              <BarChart data={visible} layout="vertical" margin={barChartMargin}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
+                <XAxis type="number" tickFormatter={axisMoney} tick={axisTick} />
+                <YAxis type="category" dataKey="accountName" width={expanded ? 150 : 96} tick={axisTick} tickFormatter={expanded ? undefined : shortAccountName} interval={0} />
+                <Tooltip content={<ImpactTooltip />} cursor={barCursor} />
+                <ReferenceLine x={0} stroke="#98a2b3" />
+                <Bar dataKey="impact" name="对净资产的影响" radius={4} maxBarSize={22}>
+                  {visible.map((row) => <Cell key={row.accountId} fill={categoryColors[row.category]} />)}
+                </Bar>
+              </BarChart>
+            );
+          }}
+        </ChartCard>
+
+        <div className="chart-card account-insight-card">
+          <h3>账户洞察</h3>
           <div className="account-insight-grid">
             <div>
               <h4>增长账户 Top 5</h4>
@@ -241,47 +388,8 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
               <small>消失：{accountInsights.removedAccounts.length > 0 ? accountInsights.removedAccounts.join('、') : '无'}</small>
             </div>
           </div>
-        </ChartCard>
-
-        <ChartCard title="大类资产堆叠趋势">
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
-              <Tooltip formatter={(value) => formatMoney(Number(value))} />
-              <Legend />
-              {assetCategories.map((category) => <Area key={category} type="monotone" dataKey={category} stackId="1" stroke={categoryColors[category]} fill={categoryColors[category]} />)}
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title={`渠道结构 · ${selected.date}`} className="structure-card">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={venueData} dataKey="value" nameKey="name" innerRadius={46} outerRadius={76} paddingAngle={4}>
-                {venueData.map((item) => <Cell key={item.name} fill={venueColors[item.name]} />)}
-              </Pie>
-              <Tooltip formatter={(value) => formatMoney(Number(value))} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="legend-list">
-            {venueData.map((item) => <span key={item.name}><i style={{ background: venueColors[item.name] }} />{item.name} {formatPercent(ratioBase === 0 ? null : item.value / ratioBase)}</span>)}
-          </div>
-          <p className="chart-note">渠道和风险大类是两条独立的维度：同一渠道里可以有不同风险的资产。</p>
-        </ChartCard>
-
-        <ChartCard title={`账户金额变化 Top 5 · ${comparisonLabel}`}>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={topChanges} layout="vertical" margin={{ left: 20, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis type="category" dataKey="accountName" width={90} />
-              <Tooltip formatter={(value) => formatMoney(Number(value))} />
-              <Bar dataKey="change" name="变化金额" fill="#2563eb" />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
+          <p className="chart-note">增长 / 下降按对净资产的影响计：负债增加算作下降。</p>
+        </div>
       </div>
     </section>
   );
@@ -410,8 +518,86 @@ function DailyNetChangeTooltip({ active, payload }: { active?: boolean; payload?
   );
 }
 
-function ChartCard({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
-  return <div className={`chart-card ${className}`}><h3>{title}</h3>{children}</div>;
+function axisMoney(value: unknown): string {
+  return formatCompactNumber(Number(value));
+}
+
+function tooltipMoney(value: unknown): string {
+  return formatMoney(Number(value));
+}
+
+function signedCompact(value: number): string {
+  return `${value > 0 ? '+' : ''}${formatCompactNumber(value)}`;
+}
+
+function signedMoney(value: number): string {
+  return `${value > 0 ? '+' : ''}${formatMoney(value)}`;
+}
+
+function shortAccountName(name: unknown): string {
+  const text = String(name);
+  return text.length > 7 ? `${text.slice(0, 6)}…` : text;
+}
+
+function sumValues(items: Array<{ value: number }>): number {
+  return items.reduce((sum, item) => sum + item.value, 0);
+}
+
+function pieSliceLabel({ name, value }: { name?: unknown; value?: unknown }): string {
+  return `${String(name ?? '')} ${formatCompactNumber(Number(value))}`;
+}
+
+function categoryCountLegend(rows: Array<{ category: AssetCategory }>): ChartLegendItem[] {
+  return categories
+    .map((category) => ({ category, count: rows.filter((row) => row.category === category).length }))
+    .filter((item) => item.count > 0)
+    .map((item) => ({ key: item.category, label: item.category, color: categoryColors[item.category], detail: `${item.count} 个` }));
+}
+
+function PieCenterLabel({ viewBox, caption, value }: { viewBox?: unknown; caption: string; value: number }) {
+  // position="center" 时 Recharts 给的是图表矩形区域，而不是饼图的 cx/cy。
+  const box = (viewBox ?? {}) as { cx?: number; cy?: number; x?: number; y?: number; width?: number; height?: number };
+  const cx = box.cx ?? (box.x !== undefined && box.width !== undefined ? box.x + box.width / 2 : undefined);
+  const cy = box.cy ?? (box.y !== undefined && box.height !== undefined ? box.y + box.height / 2 : undefined);
+  if (cx === undefined || cy === undefined) return null;
+  return (
+    <text x={cx} y={cy} textAnchor="middle" className="pie-center-label">
+      <tspan x={cx} dy="-0.4em" className="pie-center-caption">{caption}</tspan>
+      <tspan x={cx} dy="1.5em" className="pie-center-value">¥{formatCompactNumber(value)}</tspan>
+    </text>
+  );
+}
+
+type ImpactRow = { category: AssetCategory; change: number; impact: number };
+
+function ImpactTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ payload?: ImpactRow }>; label?: unknown }) {
+  const row = payload?.[0]?.payload;
+  if (!active || !row) return null;
+  const isAccountRow = 'accountName' in row;
+
+  return (
+    <div className="custom-tooltip">
+      <strong>{String(label ?? row.category)}</strong>
+      {isAccountRow ? <span>大类：{row.category}</span> : null}
+      <span>对净资产：<b className={row.impact >= 0 ? 'positive' : 'negative'}>{signedMoney(row.impact)}</b></span>
+      {isLiabilityCategory(row.category) ? <span>负债余额变化：{signedMoney(row.change)}</span> : null}
+    </div>
+  );
+}
+
+function AccountAmountTooltip({ active, payload, ratioBase }: { active?: boolean; payload?: Array<{ payload?: { accountName: string; category: AssetCategory; amount: number } }>; ratioBase: number }) {
+  const row = payload?.[0]?.payload;
+  if (!active || !row) return null;
+  const isLiability = isLiabilityCategory(row.category);
+
+  return (
+    <div className="custom-tooltip">
+      <strong>{row.accountName}</strong>
+      <span>大类：{row.category}</span>
+      <span>{isLiability ? '负债余额' : '账户金额'}：{formatMoney(row.amount)}</span>
+      {isLiability ? null : <span>占总资产：{formatPercent(ratioBase === 0 ? null : row.amount / ratioBase)}</span>}
+    </div>
+  );
 }
 
 function EmptyState() {

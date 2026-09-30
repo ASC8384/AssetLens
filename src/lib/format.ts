@@ -15,6 +15,14 @@ export function formatNumber(value: number | null | undefined, digits = 2): stri
   }).format(value);
 }
 
+const compactNumberFormat = new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 });
+
+/** 图表坐标轴这类空间有限的地方用：14.5万、1.2亿。 */
+export function formatCompactNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  return compactNumberFormat.format(value);
+}
+
 export function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '—';
   return `${(value * 100).toFixed(2)}%`;
