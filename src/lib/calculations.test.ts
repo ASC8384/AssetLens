@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recalculateSnapshot, venueTotals } from './calculations';
+import { analysisAssetTotal, hiddenCountedSummary, recalculateSnapshot, venueTotals } from './calculations';
 import { parseNumber } from './format';
 import { totalQuality } from './dashboard';
 import { createImportDraft, buildSnapshotsFromDraft, parsePastedTable } from './importers';
@@ -127,6 +127,30 @@ describe('venueTotals', () => {
     });
 
     expect(venueTotals(snapshot, [])['其他']).toBe(100);
+  });
+});
+
+describe('hidden accounts', () => {
+  it('count toward net worth but stay out of the analysis asset base', () => {
+    const snapshot = recalculateSnapshot({
+      id: 's1',
+      date: '2026-05-01',
+      exchangeRates: { CNY: 1 },
+      computedTotalCny: 0,
+      entries: [
+        { ...baseEntry, originalAmount: 100 },
+        { ...baseEntry, accountId: 'cash', category: '纯现金', originalAmount: 300 },
+        { ...baseEntry, accountId: 'card', category: '负债', originalAmount: 50 },
+        { ...baseEntry, accountId: 'excluded', originalAmount: 999, includedInTotal: false },
+      ],
+    });
+    const hidden = (id: string) => ({ id, name: id, category: '纯现金' as const, venue: '银行' as const, defaultCurrency: 'CNY', includedInTotal: true, hidden: true });
+    const accounts = [hidden('cash'), hidden('card'), hidden('excluded')];
+
+    expect(snapshot.computedTotalCny).toBe(350);
+    expect(analysisAssetTotal(snapshot, accounts)).toBe(100);
+    expect(analysisAssetTotal(snapshot, [])).toBe(400);
+    expect(hiddenCountedSummary(snapshot, accounts)).toEqual({ accountCount: 2, netAmount: 250 });
   });
 });
 

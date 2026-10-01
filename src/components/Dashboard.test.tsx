@@ -38,22 +38,49 @@ describe('Dashboard', () => {
     expect(screen.queryByText(/合计列可能识别错/)).toBeNull();
   });
 
-  it('renders account insight summary for the selected snapshot', () => {
-    render(<Dashboard data={createSampleData()} />);
+  it('shows each headline number once and folds account insights into the chart cards', () => {
+    const { container } = render(<Dashboard data={createSampleData()} />);
 
-    expect(screen.getByText('本月资产复盘入口')).toBeTruthy();
     expect(screen.getByText('生成本月复盘')).toBeTruthy();
+    expect(screen.queryByText('本月资产复盘入口')).toBeNull();
     expect(screen.getByText('查看时点')).toBeTruthy();
     expect(screen.getByLabelText('2026 年快照')).toBeTruthy();
     expect(screen.getByRole('button', { name: '2026-03-01' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '2026-05-01' })).toBeTruthy();
-    expect(screen.getByText('账户洞察')).toBeTruthy();
-    expect(screen.getByText('增长账户 Top 5')).toBeTruthy();
-    expect(screen.getByText('下降账户 Top 5')).toBeTruthy();
-    expect(screen.getByText('账户集中度')).toBeTruthy();
-    expect(screen.getAllByText('净资产').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('负债').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('本期外界收入').length).toBeGreaterThan(0);
+    const summaryLabels = [...container.querySelectorAll('.summary-strip > div > span')].map((node) => node.textContent);
+    expect(summaryLabels).toEqual(['总资产', '负债', '主导资产', '账户数', '本期外界收入', '扣除收入后变化']);
+    expect(screen.queryByText('选中时点')).toBeNull();
+    expect(screen.queryByText('账户洞察')).toBeNull();
+    expect(screen.queryByText('增长账户 Top 5')).toBeNull();
+    expect(screen.getByText(/^集中度：金额最大的 3 个资产账户占总资产/)).toBeTruthy();
+  });
+
+  it('switches the net worth trend between separate lines and stacked areas', () => {
+    render(<Dashboard data={createSampleData()} />);
+
+    const linesButton = screen.getByRole('button', { name: '分线' });
+    const stackedButton = screen.getByRole('button', { name: '堆叠' });
+    expect(linesButton.getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(stackedButton);
+    expect(stackedButton.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText(/堆叠面积加起来是各类资产合计/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '放大查看：净资产趋势（含分资产）' }));
+    const dialog = screen.getByRole('dialog', { name: '净资产趋势（含分资产）' });
+    expect(within(dialog).getByRole('button', { name: '堆叠' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('keeps hidden but counted accounts in net worth and explains the gap in structure charts', () => {
+    const sample = createSampleData();
+    const hiddenAccount = sample.accounts[0];
+    const data = { ...sample, accounts: sample.accounts.map((account) => (account.id === hiddenAccount.id ? { ...account, hidden: true } : account)) };
+    render(<Dashboard data={data} />);
+
+    expect(screen.getAllByText(/只计入净资产，不参与结构和占比/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/净资产线包含只计入净资产的隐藏账户/)).toBeTruthy();
+    expect(screen.getByText(/另有 1 个隐藏账户/)).toBeTruthy();
+    expect(screen.getByText(/^集中度：金额最大的 3 个资产账户占可分析资产/)).toBeTruthy();
   });
 
   it('labels duplicate-date snapshots so users can distinguish kept imports', () => {
@@ -91,18 +118,20 @@ describe('Dashboard', () => {
   it('navigates between snapshots without leaving the latest-follow mode until a period is chosen', () => {
     render(<Dashboard data={createSampleData()} />);
 
-    expect(screen.getByText('最新净资产 · 2026-05-01')).toBeTruthy();
+    expect(screen.getByText('最新净资产')).toBeTruthy();
+    expect(screen.getByText('正在看最新一期 · 2026-05-01')).toBeTruthy();
     expect((screen.getByRole('button', { name: '下一期' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: '最新一期' }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: '上一期' }));
 
-    expect(screen.getByText('选中时点 · 2026-04-01')).toBeTruthy();
+    expect(screen.getByText('选中时点净资产')).toBeTruthy();
+    expect(screen.getByText('正在看选中时点 · 2026-04-01')).toBeTruthy();
     expect(screen.getByRole('button', { name: '2026-04-01' }).className).toContain('active');
     expect((screen.getByRole('button', { name: '最新一期' }) as HTMLButtonElement).disabled).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: '最新一期' }));
-    expect(screen.getByText('最新净资产 · 2026-05-01')).toBeTruthy();
+    expect(screen.getByText('正在看最新一期 · 2026-05-01')).toBeTruthy();
   });
 
   it('lets the user pick a snapshot from the wrapped date list', () => {
@@ -110,7 +139,7 @@ describe('Dashboard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '2026-01-01' }));
 
-    expect(screen.getByText('选中时点 · 2026-01-01')).toBeTruthy();
+    expect(screen.getByText('正在看选中时点 · 2026-01-01')).toBeTruthy();
     expect(screen.getByRole('button', { name: '2026-01-01' }).className).toContain('active');
     expect((screen.getByRole('button', { name: '上一期' }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -137,7 +166,7 @@ describe('Dashboard', () => {
   it('gives every chart an enlarge button and toggleable legend items', () => {
     render(<Dashboard data={createSampleData()} />);
 
-    expect(screen.getAllByRole('button', { name: /^放大查看：/ })).toHaveLength(9);
+    expect(screen.getAllByRole('button', { name: /^放大查看：/ })).toHaveLength(8);
     const trendLegend = screen.getAllByRole('group', { name: /图例/ })[0];
     const equity = within(trendLegend).getByRole('button', { name: '权益类' });
     expect(equity.getAttribute('aria-pressed')).toBe('true');

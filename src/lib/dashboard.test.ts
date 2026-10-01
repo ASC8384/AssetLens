@@ -189,7 +189,7 @@ describe('selectedSnapshotContext', () => {
 });
 
 describe('accountInsightSummary', () => {
-  it('summarizes account increases, decreases, concentration and account churn', () => {
+  it('summarizes concentration and account churn', () => {
     const previous = snapshot('2026-01-01', 100, 40);
     const selected = snapshot('2026-02-01', 180, 30);
     selected.entries.push({
@@ -208,9 +208,24 @@ describe('accountInsightSummary', () => {
     });
     const summary = accountInsightSummary(previous, selected);
 
-    expect(summary.topIncreases[0]).toEqual({ accountName: '基金账户', change: 80 });
-    expect(summary.topDecreases[0]).toEqual({ accountName: '现金账户', change: -10 });
     expect(summary.newAccounts).toEqual(['新增银行卡']);
+    expect(summary.removedAccounts).toEqual([]);
+    expect(summary.concentrationRatio).toBeCloseTo(1);
+  });
+
+  it('does not treat every account as new on the first snapshot', () => {
+    expect(accountInsightSummary(undefined, snapshot('2026-01-01', 100, 40)).newAccounts).toEqual([]);
+  });
+
+  it('keeps hidden accounts out of churn names and the concentration base', () => {
+    const previous = snapshot('2026-01-01', 100, 40);
+    previous.entries.push({ ...previous.entries[1], accountId: 'secret-old', accountName: '隐藏旧账户', originalAmount: 5, amountCny: 5 });
+    const selected = snapshot('2026-02-01', 100, 40);
+    selected.entries.push({ ...selected.entries[1], accountId: 'secret-new', accountName: '隐藏新账户', originalAmount: 60, amountCny: 60 });
+    const accounts = ['secret-old', 'secret-new'].map((id) => ({ id, name: id, category: '纯现金' as const, venue: '银行' as const, defaultCurrency: 'CNY', includedInTotal: true, hidden: true }));
+
+    const summary = accountInsightSummary(previous, selected, accounts);
+    expect(summary.newAccounts).toEqual([]);
     expect(summary.removedAccounts).toEqual([]);
     expect(summary.concentrationRatio).toBeCloseTo(1);
   });
@@ -233,6 +248,17 @@ describe('dashboardSummary', () => {
       leaderAmount: 120,
       riskAssetRatio: 120 / 180,
     });
+  });
+
+  it('keeps a hidden but counted account in net worth while leaving it out of the risk ratio base', () => {
+    const latest = snapshot('2026-02-01', 120, 60);
+    latest.entries.push({ ...latest.entries[1], accountId: 'secret', accountName: '隐藏账户', originalAmount: 820, amountCny: 820 });
+    const data = { ...appData([recalculateSnapshot(latest)]), accounts: [{ id: 'secret', name: '隐藏账户', category: '纯现金' as const, venue: '银行' as const, defaultCurrency: 'CNY', includedInTotal: true, hidden: true }] };
+
+    const summary = dashboardSummary(data);
+    expect(summary.netWorth).toBe(1000);
+    expect(summary.riskAssetRatio).toBeCloseTo(120 / 180);
+    expect(unclassifiedSummary(data.snapshots[0], data.accounts).ratio).toBe(0);
   });
 });
 
@@ -270,17 +296,6 @@ describe('dashboard chart helpers', () => {
       { accountId: 'closed', accountName: '旧账户', category: '纯现金', change: -5, impact: -5 },
       { accountId: 'fund', accountName: '基金账户', category: '权益类', change: 3, impact: 3 },
     ]);
-  });
-
-  it('treats a growing liability as a decrease in account insights', () => {
-    const previous = snapshot('2026-01-01', 100, 40);
-    previous.entries.push({ ...previous.entries[1], accountId: 'card', accountName: '信用卡A', category: '负债', originalAmount: 10, amountCny: 10 });
-    const selected = snapshot('2026-02-01', 100, 40);
-    selected.entries.push({ ...selected.entries[1], accountId: 'card', accountName: '信用卡A', category: '负债', originalAmount: 30, amountCny: 30 });
-
-    const summary = accountInsightSummary(previous, selected);
-    expect(summary.topIncreases).toEqual([]);
-    expect(summary.topDecreases).toEqual([{ accountName: '信用卡A', change: -20 }]);
   });
 
   it('returns cash versus risk trend rows', () => {

@@ -4,6 +4,9 @@ import { applyAccountsToSnapshots, applyExchangeRateToSnapshots } from '../lib/c
 import { applyHistoricalRates, collectForeignCurrencies } from '../lib/exchangeRates';
 import { categories, categoryHints, isUnclassifiedCategory, venues } from '../lib/defaults';
 
+const includedHint = '取消勾选后，这个账户的金额不算进净资产，也不参与任何统计。';
+const hiddenHint = '不在明细表、账户排行、账户变化和复盘里按名字出现，也不参与大类结构、风险占比、策略和应急备用金；同时勾了「计入净资产」时，金额仍算进净资产总数。';
+
 export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
   const [rateLoading, setRateLoading] = useState(false);
   const [rateStatus, setRateStatus] = useState<string | null>(null);
@@ -115,8 +118,8 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
                   <th>大类</th>
                   <th>渠道</th>
                   <th>币种</th>
-                  <th>计入</th>
-                  <th>隐藏</th>
+                  <th title={includedHint}>计入净资产</th>
+                  <th title={hiddenHint}>隐藏</th>
                 </tr>
               </thead>
               <tbody>
@@ -135,13 +138,17 @@ export function ConfigPanel({ data, onChange }: { data: AppData; onChange: (data
                       </select>
                     </td>
                     <td><input value={account.defaultCurrency} onChange={(event) => updateAccounts([account.id], { defaultCurrency: event.target.value.toUpperCase() })} /></td>
-                    <td><input type="checkbox" checked={account.includedInTotal} onChange={(event) => updateAccounts([account.id], { includedInTotal: event.target.checked })} /></td>
-                    <td><input type="checkbox" checked={account.hidden} onChange={(event) => updateAccounts([account.id], { hidden: event.target.checked })} /></td>
+                    <td><input type="checkbox" aria-label={`${account.name}-计入净资产`} checked={account.includedInTotal} onChange={(event) => updateAccounts([account.id], { includedInTotal: event.target.checked })} /></td>
+                    <td><input type="checkbox" aria-label={`${account.name}-隐藏`} checked={account.hidden} onChange={(event) => updateAccounts([account.id], { hidden: event.target.checked })} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <p className="config-flag-note">
+            <strong>计入净资产</strong>：{includedHint}<br />
+            <strong>隐藏</strong>：{hiddenHint}
+          </p>
         </div>
 
         <div className="config-stack">

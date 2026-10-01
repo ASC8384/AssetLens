@@ -157,6 +157,16 @@ describe('FIRE analysis', () => {
     expect(result.monthlyGrowth).toBeCloseTo(100000 / months(31));
   });
 
+  it('keeps hidden accounts in FIRE progress but out of the emergency reserve', () => {
+    const accounts = [{ id: 'cash', name: '活期账户A', category: '纯现金' as const, venue: '银行' as const, defaultCurrency: 'CNY', includedInTotal: true, hidden: true }];
+    const result = analyzeFire([snapshot('2026-01-01', 900000), snapshot('2026-02-01', 1000000)], createDefaultFireConfig(), accounts);
+
+    expect(result.currentNetWorth).toBe(1000000);
+    expect(result.emergencyReserveMonths).toBe(10);
+    expect(result.emergencyReserveGap).toBe(20000);
+    expect(result.decisionSummary.emergencyStatus).toBe('需补齐');
+  });
+
   it('keeps historical speed independent from expected annual return', () => {
     const snapshots = [snapshot('2025-01-01', 1000000), snapshot('2026-01-01', 1300000)];
     const lowReturn = analyzeFire(snapshots, { ...createDefaultFireConfig(), expectedAnnualReturn: 0.01 });

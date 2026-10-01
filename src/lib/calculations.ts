@@ -97,6 +97,25 @@ export function categoryTotals(snapshot: AssetSnapshot | undefined, accounts: Ac
   return totals;
 }
 
+/**
+ * 参与结构分析（大类、渠道、各种占比）的资产合计。
+ * 隐藏但计入净资产的账户只算进净资产总数，所以占比的分母也要把它剔掉，否则百分比加起来不到 100%。
+ */
+export function analysisAssetTotal(snapshot: AssetSnapshot | undefined, accounts: AccountConfig[]): number {
+  const totals = categoryTotals(snapshot, accounts);
+  return categories.filter((category) => !isLiabilityCategory(category)).reduce((sum, category) => sum + totals[category], 0);
+}
+
+/** 隐藏但仍计入净资产的账户：金额进净资产总数，但不参与结构分析、不按名字出现。 */
+export function hiddenCountedSummary(snapshot: AssetSnapshot | undefined, accounts: AccountConfig[]): { accountCount: number; netAmount: number } {
+  const hiddenIds = new Set(accounts.filter((account) => account.hidden).map((account) => account.id));
+  const entries = (snapshot?.entries ?? []).filter((entry) => hiddenIds.has(entry.accountId) && entry.includedInTotal && entry.amountCny !== null);
+  return {
+    accountCount: entries.length,
+    netAmount: entries.reduce((sum, entry) => sum + (isLiabilityCategory(entry.category) ? -1 : 1) * (entry.amountCny ?? 0), 0),
+  };
+}
+
 /** 渠道视图只看资产，负债按渠道分组没有意义。 */
 export function venueTotals(snapshot: AssetSnapshot | undefined, accounts: AccountConfig[]): Record<AccountVenue, number> {
   const totals = Object.fromEntries(venues.map((venue) => [venue, 0])) as Record<AccountVenue, number>;

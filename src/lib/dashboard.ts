@@ -1,4 +1,4 @@
-import { categoryTotals, isLiabilityCategory, riskAssetTotal, snapshotBookTotal, stablePoolTotal } from './calculations';
+import { analysisAssetTotal, categoryTotals, isLiabilityCategory, riskAssetTotal, snapshotBookTotal, stablePoolTotal } from './calculations';
 import { categories, isUnclassifiedCategory } from './defaults';
 import { formatPercent } from './format';
 import { intervalExternalIncome, resolveExternalIncome } from './income';
@@ -143,31 +143,30 @@ export function selectedSnapshotContext(snapshots: AssetSnapshot[], selectedSnap
 }
 
 export type AccountInsightSummary = {
-  topIncreases: Array<{ accountName: string; change: number }>;
-  topDecreases: Array<{ accountName: string; change: number }>;
   newAccounts: string[];
   removedAccounts: string[];
   concentrationRatio: number | null;
 };
 
+/** 没有上一期时不算新增 / 消失；隐藏账户不按名字列出。 */
 export function accountInsightSummary(previous: AssetSnapshot | undefined, selected: AssetSnapshot, accounts: AccountConfig[] = []): AccountInsightSummary {
-  const previousEntries = new Map(previous?.entries.map((entry) => [entry.accountId, entry]) ?? []);
-  const selectedEntries = new Map(selected.entries.map((entry) => [entry.accountId, entry]));
   const hiddenIds = hiddenAccountIds(accounts);
-  const visibleAssets = selected.entries.filter((entry) => entry.includedInTotal && !hiddenIds.has(entry.accountId) && !isLiabilityCategory(entry.category));
-  const currentTotal = visibleAssets.reduce((sum, entry) => sum + (entry.amountCny ?? 0), 0);
-  const changes = accountChangeRows(previous, selected, accounts).map((row) => ({ accountName: row.accountName, change: row.impact }));
-  const selectedAmounts = visibleAssets
-    .filter((entry) => entry.amountCny !== null)
+  const listed = (snapshot: AssetSnapshot | undefined) => new Map((snapshot?.entries ?? [])
+    .filter((entry) => entry.includedInTotal && !hiddenIds.has(entry.accountId))
+    .map((entry) => [entry.accountId, entry]));
+  const before = listed(previous);
+  const after = listed(selected);
+  const topThree = [...after.values()]
+    .filter((entry) => !isLiabilityCategory(entry.category) && entry.amountCny !== null)
     .map((entry) => entry.amountCny ?? 0)
-    .sort((a, b) => b - a);
-  const topThree = selectedAmounts.slice(0, 3).reduce((sum, value) => sum + value, 0);
+    .sort((a, b) => b - a)
+    .slice(0, 3)
+    .reduce((sum, value) => sum + value, 0);
+  const analysisAssets = analysisAssetTotal(selected, accounts);
   return {
-    topIncreases: changes.filter((row) => row.change > 0).sort((a, b) => b.change - a.change).slice(0, 5),
-    topDecreases: changes.filter((row) => row.change < 0).sort((a, b) => a.change - b.change).slice(0, 5),
-    newAccounts: selected.entries.filter((entry) => !previousEntries.has(entry.accountId)).map((entry) => entry.accountName),
-    removedAccounts: [...previousEntries.values()].filter((entry) => !selectedEntries.has(entry.accountId)).map((entry) => entry.accountName),
-    concentrationRatio: currentTotal === 0 ? null : topThree / currentTotal,
+    newAccounts: previous ? [...after.values()].filter((entry) => !before.has(entry.accountId)).map((entry) => entry.accountName) : [],
+    removedAccounts: [...before.values()].filter((entry) => !after.has(entry.accountId)).map((entry) => entry.accountName),
+    concentrationRatio: analysisAssets === 0 ? null : topThree / analysisAssets,
   };
 }
 
@@ -190,11 +189,11 @@ export function unclassifiedSummary(snapshot: AssetSnapshot | undefined, account
     return entry.includedInTotal && isUnclassifiedCategory(entry.category);
   });
   const amount = rows.reduce((sum, entry) => sum + (entry.amountCny ?? 0), 0);
-  const grossAssets = snapshot.computedGrossAssetsCny;
+  const analysisAssets = analysisAssetTotal(snapshot, accounts);
   return {
     accountCount: rows.length,
     amount,
-    ratio: grossAssets === 0 ? null : amount / grossAssets,
+    ratio: analysisAssets === 0 ? null : amount / analysisAssets,
     accountNames: rows.map((entry) => entry.accountName),
   };
 }
@@ -218,12 +217,12 @@ export function dashboardSummary(data: AppData): DashboardSummary {
     .map((category) => ({ category, amount: totals[category] }))
     .sort((a, b) => b.amount - a.amount)[0];
   const riskAmount = riskAssetTotal(totals);
-  const grossAssets = latest.computedGrossAssetsCny;
+  const analysisAssets = analysisAssetTotal(latest, data.accounts);
   return {
     leaderCategory: leader?.category ?? null,
     leaderAmount: leader?.amount ?? 0,
-    riskAssetRatio: grossAssets === 0 ? null : riskAmount / grossAssets,
-    grossAssets,
+    riskAssetRatio: analysisAssets === 0 ? null : riskAmount / analysisAssets,
+    grossAssets: latest.computedGrossAssetsCny,
     liabilityAmount: latest.computedLiabilityCny,
     netWorth: latest.computedTotalCny,
     externalIncome: resolveExternalIncome(data.snapshots, latest).amount,

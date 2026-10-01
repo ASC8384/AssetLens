@@ -23,11 +23,13 @@ type ChartCardProps = {
   /** 有值时用这段说明代替图表，并禁用放大。 */
   emptyMessage?: string;
   expandedHint?: string;
+  /** 放在标题栏里的额外控件（如视图切换），卡片和放大弹窗里都会显示。 */
+  headerActions?: ReactNode;
   footer?: ReactNode;
   children: (context: ChartRenderContext) => ReactElement;
 };
 
-export function ChartCard({ title, expandedTitle, className = '', height, legend = [], emptyMessage, expandedHint, footer, children }: ChartCardProps) {
+export function ChartCard({ title, expandedTitle, className = '', height, legend = [], emptyMessage, expandedHint, headerActions, footer, children }: ChartCardProps) {
   const [hiddenKeys, setHiddenKeys] = useState<ReadonlySet<string>>(() => new Set());
   const [expanded, setExpanded] = useState(false);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
@@ -68,14 +70,17 @@ export function ChartCard({ title, expandedTitle, className = '', height, legend
     <div className={`chart-card ${className}`}>
       <div className="chart-card-header">
         <h3>{title}</h3>
-        <button ref={expandButtonRef} type="button" className="chart-expand-button" disabled={Boolean(emptyMessage)} aria-label={`放大查看：${title}`} title="放大查看" onClick={() => setExpanded(true)}>
-          <ExpandIcon />
-          放大
-        </button>
+        <div className="chart-card-actions">
+          {headerActions}
+          <button ref={expandButtonRef} type="button" className="chart-expand-button" disabled={Boolean(emptyMessage)} aria-label={`放大查看：${title}`} title="放大查看" onClick={() => setExpanded(true)}>
+            <ExpandIcon />
+            放大
+          </button>
+        </div>
       </div>
       {renderBody(false, height)}
       {expanded ? (
-        <ChartDialog title={expandedTitle ?? title} hint={expandedHint} onClose={closeExpanded}>
+        <ChartDialog title={expandedTitle ?? title} hint={expandedHint} actions={headerActions} onClose={closeExpanded}>
           {(chartHeight) => renderBody(true, chartHeight)}
         </ChartDialog>
       ) : null}
@@ -114,9 +119,10 @@ function ChartLegend({ items, hiddenKeys, onToggle, onReset }: {
   );
 }
 
-function ChartDialog({ title, hint, onClose, children }: {
+function ChartDialog({ title, hint, actions, onClose, children }: {
   title: string;
   hint?: string;
+  actions?: ReactNode;
   onClose: () => void;
   children: (chartHeight: number) => ReactNode;
 }) {
@@ -149,7 +155,10 @@ function ChartDialog({ title, hint, onClose, children }: {
             <h3 id={titleId}>{title}</h3>
             <p>{hint ? `${hint} · ` : ''}点击图例可暂时隐藏，按 Esc 关闭。</p>
           </div>
-          <button ref={closeButtonRef} type="button" onClick={onClose}>关闭</button>
+          <div className="chart-card-actions">
+            {actions}
+            <button ref={closeButtonRef} type="button" onClick={onClose}>关闭</button>
+          </div>
         </div>
         {children(chartHeight)}
       </div>

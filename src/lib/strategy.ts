@@ -1,6 +1,6 @@
-import { categoryTotals, riskAssetTotal, stablePoolTotal } from './calculations';
-import { formatMoney, formatPercent } from './format';
-import type { AssetCategory, AssetSnapshot, StrategyConfig } from './types';
+import { analysisAssetTotal, categoryTotals, riskAssetTotal, stablePoolTotal } from './calculations';
+import { formatMoney } from './format';
+import type { AccountConfig, AssetCategory, AssetSnapshot, StrategyConfig } from './types';
 
 export type StrategyAnalysis = {
   cashReserveGap: number;
@@ -27,11 +27,11 @@ export function createDefaultStrategyConfig(): StrategyConfig {
   };
 }
 
-export function analyzeStrategy(snapshot: AssetSnapshot, config: StrategyConfig): StrategyAnalysis {
-  const totals = categoryTotals(snapshot, []);
+export function analyzeStrategy(snapshot: AssetSnapshot, config: StrategyConfig, accounts: AccountConfig[] = []): StrategyAnalysis {
+  const totals = categoryTotals(snapshot, accounts);
   const safeCash = stablePoolTotal(totals);
   const riskAmount = riskAssetTotal(totals);
-  const grossAssets = snapshot.computedGrossAssetsCny;
+  const grossAssets = analysisAssetTotal(snapshot, accounts);
   const riskAssetRatio = grossAssets === 0 ? null : riskAmount / grossAssets;
   const cashReserveGap = safeCash - config.cashReserveTarget;
   const riskStatus = riskAssetRatio === null || riskAssetRatio >= config.riskAssetMinRatio && riskAssetRatio <= config.riskAssetMaxRatio
@@ -44,10 +44,14 @@ export function analyzeStrategy(snapshot: AssetSnapshot, config: StrategyConfig)
   });
   const suggestions: string[] = [];
   if (cashReserveGap < 0) suggestions.push(`应急备用金低于目标 ${formatMoney(Math.abs(cashReserveGap))}`);
-  if (riskStatus === 'above' && riskAssetRatio !== null) suggestions.push(`风险资产占比高于上限 ${formatPercent(riskAssetRatio - config.riskAssetMaxRatio)}百分点`);
-  if (riskStatus === 'below' && riskAssetRatio !== null) suggestions.push(`风险资产占比低于下限 ${formatPercent(config.riskAssetMinRatio - riskAssetRatio)}百分点`);
+  if (riskStatus === 'above' && riskAssetRatio !== null) suggestions.push(`风险资产占比高于上限 ${percentagePoints(riskAssetRatio - config.riskAssetMaxRatio)}`);
+  if (riskStatus === 'below' && riskAssetRatio !== null) suggestions.push(`风险资产占比低于下限 ${percentagePoints(config.riskAssetMinRatio - riskAssetRatio)}`);
   for (const drift of categoryDrifts.filter((item) => Math.abs(item.drift) >= 0.05)) {
-    suggestions.push(`${drift.category}偏离目标 ${formatPercent(drift.drift)}百分点`);
+    suggestions.push(`${drift.category}偏离目标 ${drift.drift > 0 ? '+' : ''}${percentagePoints(drift.drift)}`);
   }
   return { cashReserveGap, riskAssetRatio, riskStatus, categoryDrifts, suggestions };
+}
+
+function percentagePoints(ratioDiff: number): string {
+  return `${(ratioDiff * 100).toFixed(2)} 个百分点`;
 }

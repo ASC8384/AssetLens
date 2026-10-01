@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Area, AreaChart, Bar, BarChart, Brush, CartesianGrid, Cell, ComposedChart, Label, Line, LineChart, Pie, PieChart, ReferenceLine, Tooltip, XAxis, YAxis, type MouseHandlerDataParam } from 'recharts';
-import { categoryTotals, isLiabilityCategory, totalChange, venueTotals } from '../lib/calculations';
+import { useState, type ReactNode } from 'react';
+import { Area, Bar, BarChart, Brush, CartesianGrid, Cell, ComposedChart, Label, LabelList, Line, LineChart, Pie, PieChart, ReferenceLine, Tooltip, XAxis, YAxis, type LabelProps, type MouseHandlerDataParam } from 'recharts';
+import { analysisAssetTotal, categoryTotals, hiddenCountedSummary, isLiabilityCategory, totalChange, venueTotals } from '../lib/calculations';
 import { accountChangeRows, accountInsightSummary, accountRankingRows, categoryChangeRows, categoryTrendData, dailyNetChangeRows, dashboardSummary, periodCashflow, riskTrendData, selectedSnapshotContext, unclassifiedSummary } from '../lib/dashboard';
 import { assetCategories, categories, categoryColors, venueColors, venues } from '../lib/defaults';
 import { formatCompactNumber, formatMoney, formatPercent } from '../lib/format';
@@ -14,6 +14,7 @@ import type { AppData, AssetCategory } from '../lib/types';
 
 const axisTick = { fill: '#667085', fontSize: 12 };
 const gridStroke = 'rgba(16,35,63,.1)';
+const netWorthColor = '#10233f';
 const selectedMarkerColor = '#475467';
 const barCursor = { fill: 'rgba(16,35,63,.05)' };
 const chartMargin = { top: 20, right: 16, left: 0, bottom: 0 };
@@ -26,9 +27,16 @@ const dailySeries: Array<ChartLegendItem & { key: DailySeriesKey }> = [
   { key: 'afterIncomeDailyChange', label: '扣除外界收入后日均', color: '#12b8a6' },
 ];
 
+type TrendMode = 'lines' | 'stacked';
+const trendModes: Array<{ key: TrendMode; label: string }> = [
+  { key: 'lines', label: '分线' },
+  { key: 'stacked', label: '堆叠' },
+];
+
 export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpenMonthlyReview?: (range: ReviewRangeRequest) => void }) {
   const snapshots = data.snapshots;
   const [selectedSnapshotId, setSelectedSnapshotId] = useState('');
+  const [trendMode, setTrendMode] = useState<TrendMode>('lines');
   const { selected, previous, selectedIndex } = selectedSnapshotContext(snapshots, selectedSnapshotId);
   const isFollowingLatest = !selectedSnapshotId;
   if (!selected) {
@@ -53,9 +61,14 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
   const comparisonLabel = previous ? `${previous.date} → ${selected.date}` : `${selected.date} 无前一期`;
   const summary = dashboardSummary({ ...data, snapshots: [selected] });
   const accountInsights = accountInsightSummary(previous, selected, data.accounts);
-  const strategy = analyzeStrategy(selected, data.strategy);
+  const strategy = analyzeStrategy(selected, data.strategy, data.accounts);
   const cashflow = periodCashflow(previous, selected, snapshots);
-  const ratioBase = selected.computedGrossAssetsCny;
+  const hiddenIds = new Set(data.accounts.filter((account) => account.hidden).map((account) => account.id));
+  const hiddenEntryCount = selected.entries.filter((entry) => hiddenIds.has(entry.accountId)).length;
+  const hiddenCounted = hiddenCountedSummary(selected, data.accounts);
+  const trendHasHiddenCounted = snapshots.some((snapshot) => hiddenCountedSummary(snapshot, data.accounts).accountCount > 0);
+  const ratioBase = analysisAssetTotal(selected, data.accounts);
+  const ratioBaseLabel = hiddenCounted.accountCount > 0 ? '可分析资产' : '总资产';
   const shareOfAssets = (value: number) => formatPercent(ratioBase === 0 ? null : value / ratioBase);
   const incomeStatus = intervalExternalIncomeLabel({ amount: cashflow.externalIncome, recorded: cashflow.externalIncomeRecorded }, selected.date);
   const incomeHint = incomeStatus
@@ -72,12 +85,17 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
     const id = String(state.activeLabel ?? '');
     if (snapshotById.has(id)) setSelectedSnapshotId(id);
   };
+  const isStacked = trendMode === 'stacked';
   const hasValue = (key: string) => trendData.some((row) => Number(row[key] ?? 0) !== 0);
   const trendLegend: ChartLegendItem[] = [
-    { key: 'total', label: '净资产', color: '#10233f' },
-    ...categories.filter(hasValue).map((category) => ({ key: category, label: category, color: categoryColors[category] })),
+    { key: 'total', label: '净资产', color: netWorthColor },
+    ...(isStacked ? assetCategories : categories).filter(hasValue).map((category) => ({ key: category, label: category, color: categoryColors[category] })),
   ];
-  const stackLegend: ChartLegendItem[] = assetCategories.filter(hasValue).map((category) => ({ key: category, label: category, color: categoryColors[category] }));
+  // 净资产排第一；堆叠时其余按从上到下的叠放顺序，和图上看到的一致。
+  const trendTooltipOrder = (item: { dataKey?: unknown }) => {
+    const index = trendLegend.findIndex((series) => series.key === item.dataKey);
+    return isStacked && index > 0 ? trendLegend.length - index : index;
+  };
   const riskLegend: ChartLegendItem[] = [
     { key: 'safe', label: '纯现金 + 稳健类', color: '#12b8a6' },
     { key: 'risk', label: '权益类', color: categoryColors['权益类'] },
@@ -89,14 +107,30 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
   const selectedHasInterval = dailyRows.some((row) => row.endDate === selected.date);
   const timeSeriesHint = '拖动底部滑块可只看一段时间，点图上任一日期可切换查看时点';
   const noPreviousMessage = '这是第一期快照，没有上一期可对比。';
+  const hiddenCountedNote = hiddenCounted.accountCount > 0
+    ? `不含 ${hiddenCounted.accountCount} 个隐藏账户（合计 ${formatMoney(hiddenCounted.netAmount)}）：它们只计入净资产，不参与结构和占比。`
+    : null;
+  const accountTurnoverNote = [
+    accountInsights.newAccounts.length > 0 ? `新增账户：${nameList(accountInsights.newAccounts)}` : null,
+    accountInsights.removedAccounts.length > 0 ? `消失账户：${nameList(accountInsights.removedAccounts)}` : null,
+  ].filter(Boolean).join('；') || null;
   const selectedMarker = (x: string) => (
     <ReferenceLine x={x} stroke={selectedMarkerColor} strokeDasharray="4 4" label={{ value: '选中', position: 'top', fill: selectedMarkerColor, fontSize: 12 }} />
   );
   const timeAxis = <XAxis dataKey="id" tickFormatter={snapshotAxisDate} tick={axisTick} tickMargin={8} minTickGap={18} />;
   const moneyAxis = <YAxis tickFormatter={axisMoney} tick={axisTick} width={56} axisLine={false} tickLine={false} />;
   const brush = (expanded: boolean, rowCount: number, dataKey: 'date' | 'endDate') => (expanded && rowCount > 2
-    ? <Brush dataKey={dataKey} height={28} travellerWidth={10} stroke="#10233f" fill="rgba(255,255,255,.7)" />
+    ? <Brush dataKey={dataKey} height={28} travellerWidth={10} stroke={netWorthColor} fill="rgba(255,255,255,.7)" />
     : null);
+  const trendModeToggle = (
+    <div className="segmented-toggle" role="group" aria-label="趋势图显示方式">
+      {trendModes.map((mode) => (
+        <button key={mode.key} type="button" className={trendMode === mode.key ? 'active' : ''} aria-pressed={trendMode === mode.key} onClick={() => setTrendMode(mode.key)}>
+          {mode.label}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <section className="dashboard">
@@ -104,7 +138,7 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
         <div className="hero-copy">
           <span className="eyebrow">PORTFOLIO RADAR</span>
           <h2>{formatMoney(selected.computedTotalCny)}</h2>
-          <p>{isFollowingLatest ? '最新净资产' : '选中时点'} · {selected.date}</p>
+          <p>{isFollowingLatest ? '最新净资产' : '选中时点净资产'}</p>
         </div>
         <div className="hero-orbit" aria-hidden="true">
           <span className="orbit-ring ring-one" />
@@ -131,15 +165,6 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
         </div>
       )}
 
-      <div className="dashboard-action-card chart-card">
-        <div>
-          <span className="eyebrow">MONTHLY REVIEW</span>
-          <h3>本月资产复盘入口</h3>
-          <p>最近一期较上一期变化 {formatMoney(change.amount)}，风险资产占比 {formatPercent(summary.riskAssetRatio)}。</p>
-        </div>
-        <button className="primary" onClick={() => onOpenMonthlyReview?.({ ...calendarMonthRange(selected.date), preset: 'custom' })}>生成本月复盘</button>
-      </div>
-
       <SnapshotNavigator
         snapshots={snapshots}
         selected={selected}
@@ -147,13 +172,20 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
         selectedIndex={selectedIndex}
         isFollowingLatest={isFollowingLatest}
         onSelect={setSelectedSnapshotId}
+        actions={<button className="primary" onClick={() => onOpenMonthlyReview?.({ ...calendarMonthRange(selected.date), preset: 'custom' })}>生成本月复盘</button>}
       />
 
-      <div className="insight-strip">
-        <div><span>主导资产</span><strong>{summary.leaderCategory ?? '—'}</strong><small>{formatMoney(summary.leaderAmount)}</small></div>
-        <div><span>风险资产</span><strong>{formatPercent(summary.riskAssetRatio)}</strong><small>权益类 / 总资产</small></div>
-        <div><span>负债</span><strong className={summary.liabilityAmount > 0 ? 'negative' : ''}>{formatMoney(summary.liabilityAmount)}</strong><small>信用卡等欠款</small></div>
-        <div><span>选中时点</span><strong>{selected.date}</strong><small>{previous ? `对比 ${previous.date}` : '暂无前一期'}</small></div>
+      <div className="insight-strip summary-strip">
+        <SummaryCell label="总资产" value={formatMoney(selected.computedGrossAssetsCny)} hint="不含信用卡等欠款" />
+        <SummaryCell label="负债" value={formatMoney(selected.computedLiabilityCny)} hint="已从净资产中扣除" tone={selected.computedLiabilityCny > 0 ? 'negative' : undefined} />
+        <SummaryCell
+          label="主导资产"
+          value={summary.leaderCategory ?? '—'}
+          hint={summary.leaderCategory ? `${formatMoney(summary.leaderAmount)} · ${shareOfAssets(summary.leaderAmount)}` : '暂无正资产'}
+        />
+        <SummaryCell label="账户数" value={`${selected.entries.length - hiddenEntryCount}`} hint={hiddenEntryCount > 0 ? `另有 ${hiddenEntryCount} 个隐藏账户` : '当前时点账户数量'} />
+        <SummaryCell label="本期外界收入" value={formatMoney(cashflow.externalIncome)} hint={incomeHint} tone={signTone(cashflow.externalIncome)} />
+        <SummaryCell label="扣除收入后变化" value={formatMoney(cashflow.afterIncomeChange)} hint="剩余部分含理财与支出" tone={signTone(cashflow.afterIncomeChange)} />
       </div>
 
       <div className="strategy-radar chart-card">
@@ -166,50 +198,55 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
         </ul>
       </div>
 
-      <div className="metric-grid">
-        <Metric title="净资产" value={formatMoney(selected.computedTotalCny)} hint="总资产 − 负债" />
-        <Metric title="总资产" value={formatMoney(selected.computedGrossAssetsCny)} hint="不含信用卡等欠款" />
-        <Metric title="负债" value={formatMoney(selected.computedLiabilityCny)} hint="欠款按正数记录" tone={selected.computedLiabilityCny > 0 ? 'negative' : undefined} />
-        <Metric title="账户数" value={`${selected.entries.length}`} hint="当前时点账户数量" />
-      </div>
-
-      <div className="insight-strip cashflow-strip">
-        <div><span>较上一期净资产</span><strong className={(cashflow.netChange ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(cashflow.netChange)}</strong><small>{comparisonLabel}</small></div>
-        <div><span>本期外界收入</span><strong className="positive">{formatMoney(cashflow.externalIncome)}</strong><small>{incomeHint}</small></div>
-        <div><span>扣除收入后变化</span><strong className={(cashflow.afterIncomeChange ?? 0) >= 0 ? 'positive' : 'negative'}>{formatMoney(cashflow.afterIncomeChange)}</strong><small>剩余部分含理财与支出</small></div>
-      </div>
-
       <p className="chart-section-hint">点图例可暂时隐藏对应项目，再点一次恢复；点图表右上角「放大」看大图。趋势图上点任一日期可切换查看时点。</p>
 
       <div className="chart-grid main-charts dashboard-feature-grid">
-        <ChartCard title="净资产趋势（含分资产）" className="feature-chart" height={340} legend={trendLegend} expandedHint={timeSeriesHint}>
+        <ChartCard
+          title="净资产趋势（含分资产）"
+          className="feature-chart"
+          height={340}
+          legend={trendLegend}
+          headerActions={trendModeToggle}
+          expandedHint={timeSeriesHint}
+          footer={<ChartNotes notes={[
+            isStacked ? '堆叠面积加起来是各类资产合计，深色线是净资产，两者之差主要是负债。' : null,
+            trendHasHiddenCounted ? '净资产线包含只计入净资产的隐藏账户，分资产不包含。' : null,
+          ]} />}
+        >
           {({ expanded, isVisible }) => (
-            <LineChart data={trendData} margin={chartMargin} onClick={selectSnapshotFromChart} style={{ cursor: 'pointer' }}>
+            <ComposedChart data={trendData} margin={chartMargin} onClick={selectSnapshotFromChart} style={{ cursor: 'pointer' }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
               {timeAxis}
               {moneyAxis}
-              <Tooltip formatter={tooltipMoney} labelFormatter={snapshotTooltipLabel} />
-              {trendLegend.filter((series) => isVisible(series.key)).map((series) => (
-                series.key === 'total'
-                  ? <Line key={series.key} type="monotone" dataKey="total" name="净资产" stroke={series.color} strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                  : <Line key={series.key} type="monotone" dataKey={series.key} name={series.label} stroke={series.color} strokeWidth={2} dot={expanded ? { r: 2 } : false} />
+              <Tooltip formatter={tooltipMoney} labelFormatter={snapshotTooltipLabel} itemSorter={trendTooltipOrder} />
+              {trendLegend.filter((series) => series.key !== 'total' && isVisible(series.key)).map((series) => (isStacked
+                ? <Area key={`stacked-${series.key}`} type="monotone" dataKey={series.key} name={series.label} stackId="assets" stroke={series.color} fill={series.color} fillOpacity={0.5} strokeWidth={1.5} />
+                : <Line key={`line-${series.key}`} type="monotone" dataKey={series.key} name={series.label} stroke={series.color} strokeWidth={2} dot={expanded ? { r: 2 } : false} />
               ))}
+              {isVisible('total') ? <Line type="monotone" dataKey="total" name="净资产" stroke={netWorthColor} strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 5 }} /> : null}
               {selectedMarker(selected.id)}
               {brush(expanded, trendData.length, 'date')}
-            </LineChart>
+            </ComposedChart>
           )}
         </ChartCard>
 
-        <ChartCard title={`选中时点资产结构 · ${selected.date}`} className="structure-card" height={260} legend={categoryLegend} emptyMessage={categoryData.length === 0 ? '该时点没有正资产。' : undefined}>
+        <ChartCard
+          title={`选中时点资产结构 · ${selected.date}`}
+          className="structure-card"
+          height={260}
+          legend={categoryLegend}
+          emptyMessage={categoryData.length === 0 ? '该时点没有正资产。' : undefined}
+          footer={<ChartNotes notes={[hiddenCountedNote]} />}
+        >
           {({ expanded, isVisible }) => {
             const visible = categoryData.filter((item) => isVisible(item.name));
             return (
               <PieChart>
                 <Pie data={visible} dataKey="value" nameKey="name" innerRadius="56%" outerRadius="82%" paddingAngle={3} label={expanded ? pieSliceLabel : false} labelLine={expanded}>
                   {visible.map((item) => <Cell key={item.name} fill={categoryColors[item.name]} />)}
-                  <Label position="center" content={<PieCenterLabel caption={visible.length === categoryData.length ? '总资产' : '已选合计'} value={sumValues(visible)} />} />
+                  <Label position="center" content={<PieCenterLabel caption={visible.length === categoryData.length ? ratioBaseLabel : '已选合计'} value={sumValues(visible)} />} />
                 </Pie>
-                <Tooltip formatter={(value, name) => [`${formatMoney(Number(value))} · 占总资产 ${shareOfAssets(Number(value))}`, name]} />
+                <Tooltip formatter={(value, name) => [`${formatMoney(Number(value))} · 占${ratioBaseLabel} ${shareOfAssets(Number(value))}`, name]} />
               </PieChart>
             );
           }}
@@ -255,19 +292,45 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
           legend={categoryCountLegend(rankingRows)}
           expandedHint="显示前 20 个账户，颜色对应大类"
           emptyMessage={rankingRows.length === 0 ? '该时点没有可排行的账户。' : undefined}
+          footer={<ChartNotes notes={[
+            accountInsights.concentrationRatio === null ? null : `集中度：金额最大的 3 个资产账户占${ratioBaseLabel} ${formatPercent(accountInsights.concentrationRatio)}。`,
+          ]} />}
         >
           {({ expanded, isVisible }) => {
             const visible = rankingRows.filter((row) => isVisible(row.category)).slice(0, expanded ? 20 : 8);
             return (
               <BarChart data={visible} layout="vertical" margin={barChartMargin}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
-                <XAxis type="number" tickFormatter={axisMoney} tick={axisTick} />
+                <XAxis type="number" padding={barLabelPadding(visible.map((row) => row.amount))} tickFormatter={axisMoney} tick={axisTick} />
                 <YAxis type="category" dataKey="accountName" width={expanded ? 150 : 96} tick={axisTick} tickFormatter={expanded ? undefined : shortAccountName} interval={0} />
-                <Tooltip content={<AccountAmountTooltip ratioBase={ratioBase} />} cursor={barCursor} />
+                <Tooltip content={<AccountAmountTooltip ratioBase={ratioBase} ratioBaseLabel={ratioBaseLabel} />} cursor={barCursor} />
                 <Bar dataKey="amount" name="账户金额" radius={[0, 6, 6, 0]} maxBarSize={22}>
                   {visible.map((row, index) => <Cell key={`${row.accountName}-${index}`} fill={categoryColors[row.category]} />)}
+                  <LabelList dataKey="amount" content={compactBarLabel} />
                 </Bar>
               </BarChart>
+            );
+          }}
+        </ChartCard>
+
+        <ChartCard
+          title={`渠道结构 · ${selected.date}`}
+          className="structure-card"
+          height={260}
+          legend={venueLegend}
+          emptyMessage={venueData.length === 0 ? '该时点没有正资产。' : undefined}
+          footer={<ChartNotes notes={['渠道和风险大类是两条独立的维度：同一渠道里可以有不同风险的资产。', hiddenCountedNote]} />}
+        >
+          {({ expanded, isVisible }) => {
+            const visible = venueData.filter((item) => isVisible(item.name));
+            return (
+              <PieChart>
+                <Pie data={visible} dataKey="value" nameKey="name" innerRadius="56%" outerRadius="82%" paddingAngle={3} label={expanded ? pieSliceLabel : false} labelLine={expanded}>
+                  {visible.map((item) => <Cell key={item.name} fill={venueColors[item.name]} />)}
+                  <Label position="center" content={<PieCenterLabel caption={visible.length === venueData.length ? ratioBaseLabel : '已选合计'} value={sumValues(visible)} />} />
+                </Pie>
+                <Tooltip formatter={(value, name) => [`${formatMoney(Number(value))} · 占${ratioBaseLabel} ${shareOfAssets(Number(value))}`, name]} />
+              </PieChart>
             );
           }}
         </ChartCard>
@@ -277,7 +340,7 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
           height={260}
           legend={categoryImpactLegend}
           emptyMessage={!previous ? noPreviousMessage : categoryImpactRows.length === 0 ? '两期之间各大类金额没有变化。' : undefined}
-          footer={<p className="chart-note">按对净资产的影响计：负债增加显示为负值。</p>}
+          footer={<ChartNotes notes={['按对净资产的影响计：负债增加显示为负值。']} />}
         >
           {({ isVisible }) => {
             const visible = categoryImpactRows.filter((row) => isVisible(row.category));
@@ -295,101 +358,33 @@ export function Dashboard({ data, onOpenMonthlyReview }: { data: AppData; onOpen
             );
           }}
         </ChartCard>
-      </div>
-
-      <div className="chart-grid secondary-charts">
-        <ChartCard title="大类资产堆叠趋势" height={260} legend={stackLegend} expandedHint={timeSeriesHint} emptyMessage={stackLegend.length === 0 ? '暂无资产数据。' : undefined}>
-          {({ expanded, isVisible }) => (
-            <AreaChart data={trendData} margin={chartMargin} onClick={selectSnapshotFromChart} style={{ cursor: 'pointer' }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
-              {timeAxis}
-              {moneyAxis}
-              <Tooltip formatter={tooltipMoney} labelFormatter={snapshotTooltipLabel} />
-              {stackLegend.filter((series) => isVisible(series.key)).map((series) => (
-                <Area key={series.key} type="monotone" dataKey={series.key} name={series.label} stackId="assets" stroke={series.color} fill={series.color} fillOpacity={0.55} />
-              ))}
-              {selectedMarker(selected.id)}
-              {brush(expanded, trendData.length, 'date')}
-            </AreaChart>
-          )}
-        </ChartCard>
 
         <ChartCard
-          title={`渠道结构 · ${selected.date}`}
-          className="structure-card"
-          height={220}
-          legend={venueLegend}
-          emptyMessage={venueData.length === 0 ? '该时点没有正资产。' : undefined}
-          footer={<p className="chart-note">渠道和风险大类是两条独立的维度：同一渠道里可以有不同风险的资产。</p>}
-        >
-          {({ expanded, isVisible }) => {
-            const visible = venueData.filter((item) => isVisible(item.name));
-            return (
-              <PieChart>
-                <Pie data={visible} dataKey="value" nameKey="name" innerRadius="56%" outerRadius="82%" paddingAngle={3} label={expanded ? pieSliceLabel : false} labelLine={expanded}>
-                  {visible.map((item) => <Cell key={item.name} fill={venueColors[item.name]} />)}
-                  <Label position="center" content={<PieCenterLabel caption={visible.length === venueData.length ? '总资产' : '已选合计'} value={sumValues(visible)} />} />
-                </Pie>
-                <Tooltip formatter={(value, name) => [`${formatMoney(Number(value))} · 占总资产 ${shareOfAssets(Number(value))}`, name]} />
-              </PieChart>
-            );
-          }}
-        </ChartCard>
-
-        <ChartCard
-          title={`账户金额变化 Top 5 · ${comparisonLabel}`}
-          expandedTitle={`账户金额变化 Top 15 · ${comparisonLabel}`}
+          title={`账户金额变化 Top 8 · ${comparisonLabel}`}
+          expandedTitle={`账户金额变化 Top 20 · ${comparisonLabel}`}
           height={260}
           legend={categoryCountLegend(accountImpactRows)}
           expandedHint="颜色对应大类"
           emptyMessage={!previous ? noPreviousMessage : accountImpactRows.length === 0 ? '两期之间账户金额没有变化。' : undefined}
-          footer={<p className="chart-note">按对净资产的影响排序：负债增加显示为负值；上一期有、本期消失的账户按清零计。</p>}
+          footer={<ChartNotes notes={['按对净资产的影响排序：负债增加显示为负值；上一期有、本期消失的账户按清零计。', accountTurnoverNote]} />}
         >
           {({ expanded, isVisible }) => {
-            const visible = accountImpactRows.filter((row) => isVisible(row.category)).slice(0, expanded ? 15 : 5);
+            const visible = accountImpactRows.filter((row) => isVisible(row.category)).slice(0, expanded ? 20 : 8);
             return (
               <BarChart data={visible} layout="vertical" margin={barChartMargin}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
-                <XAxis type="number" tickFormatter={axisMoney} tick={axisTick} />
+                <XAxis type="number" padding={barLabelPadding(visible.map((row) => row.impact))} tickFormatter={axisMoney} tick={axisTick} />
                 <YAxis type="category" dataKey="accountName" width={expanded ? 150 : 96} tick={axisTick} tickFormatter={expanded ? undefined : shortAccountName} interval={0} />
                 <Tooltip content={<ImpactTooltip />} cursor={barCursor} />
                 <ReferenceLine x={0} stroke="#98a2b3" />
                 <Bar dataKey="impact" name="对净资产的影响" radius={4} maxBarSize={22}>
                   {visible.map((row) => <Cell key={row.accountId} fill={categoryColors[row.category]} />)}
+                  <LabelList dataKey="impact" content={signedBarLabel} />
                 </Bar>
               </BarChart>
             );
           }}
         </ChartCard>
-
-        <div className="chart-card account-insight-card">
-          <h3>账户洞察</h3>
-          <div className="account-insight-grid">
-            <div>
-              <h4>增长账户 Top 5</h4>
-              <div className="contribution-list">
-                {(accountInsights.topIncreases.length > 0 ? accountInsights.topIncreases : [{ accountName: '暂无增长账户', change: 0 }]).map((row) => <div key={row.accountName}><span>{row.accountName}</span><strong className="positive">{formatMoney(row.change)}</strong></div>)}
-              </div>
-            </div>
-            <div>
-              <h4>下降账户 Top 5</h4>
-              <div className="contribution-list">
-                {(accountInsights.topDecreases.length > 0 ? accountInsights.topDecreases : [{ accountName: '暂无下降账户', change: 0 }]).map((row) => <div key={row.accountName}><span>{row.accountName}</span><strong className="negative">{formatMoney(row.change)}</strong></div>)}
-              </div>
-            </div>
-            <div>
-              <h4>账户集中度</h4>
-              <strong>{formatPercent(accountInsights.concentrationRatio)}</strong>
-              <small>当前 Top 3 账户占总资产比例</small>
-            </div>
-            <div>
-              <h4>账户变化</h4>
-              <small>新增：{accountInsights.newAccounts.length > 0 ? accountInsights.newAccounts.join('、') : '无'}</small>
-              <small>消失：{accountInsights.removedAccounts.length > 0 ? accountInsights.removedAccounts.join('、') : '无'}</small>
-            </div>
-          </div>
-          <p className="chart-note">增长 / 下降按对净资产的影响计：负债增加算作下降。</p>
-        </div>
       </div>
     </section>
   );
@@ -402,6 +397,7 @@ function SnapshotNavigator({
   selectedIndex,
   isFollowingLatest,
   onSelect,
+  actions,
 }: {
   snapshots: AppData['snapshots'];
   selected: AppData['snapshots'][number];
@@ -409,6 +405,7 @@ function SnapshotNavigator({
   selectedIndex: number;
   isFollowingLatest: boolean;
   onSelect: (snapshotId: string) => void;
+  actions?: ReactNode;
 }) {
   const yearGroups = groupSnapshotsByYear(snapshots);
 
@@ -428,6 +425,7 @@ function SnapshotNavigator({
           <button disabled={selectedIndex <= 0} onClick={() => onSelect(snapshots[selectedIndex - 1]?.id ?? '')}>上一期</button>
           <button disabled={selectedIndex >= snapshots.length - 1} onClick={() => onSelect(snapshots[selectedIndex + 1]?.id ?? '')}>下一期</button>
           <button className="snapshot-latest-button" disabled={isFollowingLatest} onClick={() => onSelect('')}>最新一期</button>
+          {actions}
         </div>
       </div>
       {yearGroups.map((group) => (
@@ -487,14 +485,20 @@ function snapshotDateExtra(snapshots: AppData['snapshots'], snapshot: AppData['s
   return label === snapshot.date ? null : label.replace(`${snapshot.date} · `, '');
 }
 
-function Metric({ title, value, hint, tone }: { title: string; value: string; hint: string; tone?: 'positive' | 'negative' }) {
+function SummaryCell({ label, value, hint, tone }: { label: string; value: string; hint: string; tone?: 'positive' | 'negative' }) {
   return (
-    <div className="metric-card">
-      <span>{title}</span>
+    <div>
+      <span>{label}</span>
       <strong className={tone}>{value}</strong>
       <small>{hint}</small>
     </div>
   );
+}
+
+function ChartNotes({ notes }: { notes: Array<string | null> }) {
+  const shown = notes.filter((note): note is string => Boolean(note));
+  if (shown.length === 0) return null;
+  return <>{shown.map((note) => <p key={note} className="chart-note">{note}</p>)}</>;
 }
 
 type TooltipPayload = {
@@ -534,14 +538,46 @@ function signedMoney(value: number): string {
   return `${value > 0 ? '+' : ''}${formatMoney(value)}`;
 }
 
+function signTone(value: number | null): 'positive' | 'negative' | undefined {
+  if (value === null || value === 0) return undefined;
+  return value > 0 ? 'positive' : 'negative';
+}
+
 function shortAccountName(name: unknown): string {
   const text = String(name);
   return text.length > 7 ? `${text.slice(0, 6)}…` : text;
 }
 
+function nameList(names: string[]): string {
+  return names.length > 6 ? `${names.slice(0, 6).join('、')} 等 ${names.length} 个` : names.join('、');
+}
+
 function sumValues(items: Array<{ value: number }>): number {
   return items.reduce((sum, item) => sum + item.value, 0);
 }
+
+/** 条形末端有数值标签，按像素给有条形的一侧留白，避免最长的条把标签挤出图表或压到坐标轴上。 */
+function barLabelPadding(values: number[]): { left: number; right: number } {
+  return { left: values.some((value) => value < 0) ? 44 : 0, right: values.some((value) => value > 0) ? 44 : 0 };
+}
+
+function barEndLabel(format: (value: number) => string) {
+  return function BarEndLabel({ viewBox, value }: LabelProps) {
+    const box = viewBox as { x?: number; y?: number; width?: number; height?: number } | undefined;
+    if (box?.x === undefined || box.y === undefined || box.width === undefined || box.height === undefined) return null;
+    const amount = Number(value);
+    const isNegative = amount < 0;
+    const edge = isNegative ? Math.min(box.x, box.x + box.width) - 6 : Math.max(box.x, box.x + box.width) + 6;
+    return (
+      <text x={edge} y={box.y + box.height / 2} textAnchor={isNegative ? 'end' : 'start'} dominantBaseline="central" className="bar-value-label">
+        {format(amount)}
+      </text>
+    );
+  };
+}
+
+const compactBarLabel = barEndLabel(formatCompactNumber);
+const signedBarLabel = barEndLabel(signedCompact);
 
 function pieSliceLabel({ name, value }: { name?: unknown; value?: unknown }): string {
   return `${String(name ?? '')} ${formatCompactNumber(Number(value))}`;
@@ -585,7 +621,12 @@ function ImpactTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-function AccountAmountTooltip({ active, payload, ratioBase }: { active?: boolean; payload?: Array<{ payload?: { accountName: string; category: AssetCategory; amount: number } }>; ratioBase: number }) {
+function AccountAmountTooltip({ active, payload, ratioBase, ratioBaseLabel }: {
+  active?: boolean;
+  payload?: Array<{ payload?: { accountName: string; category: AssetCategory; amount: number } }>;
+  ratioBase: number;
+  ratioBaseLabel: string;
+}) {
   const row = payload?.[0]?.payload;
   if (!active || !row) return null;
   const isLiability = isLiabilityCategory(row.category);
@@ -595,7 +636,7 @@ function AccountAmountTooltip({ active, payload, ratioBase }: { active?: boolean
       <strong>{row.accountName}</strong>
       <span>大类：{row.category}</span>
       <span>{isLiability ? '负债余额' : '账户金额'}：{formatMoney(row.amount)}</span>
-      {isLiability ? null : <span>占总资产：{formatPercent(ratioBase === 0 ? null : row.amount / ratioBase)}</span>}
+      {isLiability ? null : <span>占{ratioBaseLabel}：{formatPercent(ratioBase === 0 ? null : row.amount / ratioBase)}</span>}
     </div>
   );
 }

@@ -36,7 +36,7 @@ function importChips(data: AppData): Chip[] {
 
 function strategyChips(data: AppData): Chip[] {
   const latest = data.snapshots[data.snapshots.length - 1];
-  const analysis = latest ? analyzeStrategy(latest, data.strategy) : null;
+  const analysis = latest ? analyzeStrategy(latest, data.strategy, data.accounts) : null;
   const range = `${formatPercent(data.strategy.riskAssetMinRatio)}–${formatPercent(data.strategy.riskAssetMaxRatio)}`;
   if (!analysis) {
     return [

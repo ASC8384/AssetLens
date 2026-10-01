@@ -1,7 +1,7 @@
 import { categoryTotals, stablePoolTotal } from './calculations';
 import { intervalExternalIncome, intervalExternalIncomeLabel } from './income';
 import { DAYS_PER_MONTH, daysBetween, snapshotIntervalRows } from './intervals';
-import type { AssetSnapshot, FireConfig } from './types';
+import type { AccountConfig, AssetSnapshot, FireConfig } from './types';
 
 export type FireSpeedEstimate = {
   key: 'lastMonth' | 'lastYear' | 'allTime';
@@ -92,12 +92,12 @@ export function fireSensitivityMatrix(config: FireConfig, currentNetWorth: numbe
   return { rates: sortedRates, rows };
 }
 
-export function fireDecisionSummary(latest: AssetSnapshot | undefined, config: FireConfig, today = new Date()): FireDecisionSummary {
+export function fireDecisionSummary(latest: AssetSnapshot | undefined, config: FireConfig, today = new Date(), accounts: AccountConfig[] = []): FireDecisionSummary {
   const currentNetWorth = latest?.computedTotalCny ?? 0;
   const annualExpense = config.monthlyExpense * 12;
   const fireTarget = config.withdrawalRate > 0 ? annualExpense / config.withdrawalRate : 0;
   const fireGap = Math.max(0, fireTarget - currentNetWorth);
-  const totals = latest ? categoryTotals(latest, []) : null;
+  const totals = latest ? categoryTotals(latest, accounts) : null;
   const emergencyAssets = totals ? stablePoolTotal(totals) : 0;
   const emergencyReserveTarget = config.monthlyExpense * config.emergencyReserveMonthsTarget;
   const matrix = fireSensitivityMatrix(config, currentNetWorth);
@@ -128,14 +128,14 @@ function targetYearMonth(today: Date, months: number | null): string | null {
   return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): FireAnalysis {
+export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig, accounts: AccountConfig[] = []): FireAnalysis {
   const latest = snapshots[snapshots.length - 1];
   const currentNetWorth = latest?.computedTotalCny ?? 0;
   const annualExpense = config.monthlyExpense * 12;
   const fireTarget = config.withdrawalRate > 0 ? annualExpense / config.withdrawalRate : 0;
   const fireGap = Math.max(0, fireTarget - currentNetWorth);
   const monthlyGrowth = averageMonthlyGrowth(snapshots);
-  const totals = latest ? categoryTotals(latest, []) : null;
+  const totals = latest ? categoryTotals(latest, accounts) : null;
   const emergencyAssets = totals ? stablePoolTotal(totals) : 0;
   const emergencyReserveTarget = config.monthlyExpense * config.emergencyReserveMonthsTarget;
   const emergencyReserveGap = Math.max(0, emergencyReserveTarget - emergencyAssets);
@@ -167,7 +167,7 @@ export function analyzeFire(snapshots: AssetSnapshot[], config: FireConfig): Fir
       return { label: `${(rate * 100).toFixed(1)}%`, withdrawalRate: rate, target, gap: Math.max(0, target - currentNetWorth) };
     }),
     sensitivityMatrix: fireSensitivityMatrix(config, currentNetWorth),
-    decisionSummary: fireDecisionSummary(latest, config),
+    decisionSummary: fireDecisionSummary(latest, config, new Date(), accounts),
   };
 }
 

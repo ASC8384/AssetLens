@@ -81,6 +81,14 @@ describe('report helpers', () => {
     ]);
   });
 
+  it('leaves hidden accounts out of contributions and risk ratios but keeps them in net worth', () => {
+    const accounts = [{ id: 'cash', name: '活期账户A', category: '纯现金' as const, venue: '银行' as const, defaultCurrency: 'CNY', includedInTotal: true, hidden: true }];
+    const summary = buildStructuredReportSummary({ ...data, accounts }, '2026-01-01', '2026-04-01', 'endpoint');
+
+    expect(accountContributionRows(data.snapshots[0], data.snapshots[2], accounts)).toEqual([{ accountName: '场外基金A', change: 60 }]);
+    expect(summary).toMatchObject({ startTotal: 150, endTotal: 250, riskAssetRatioChange: { start: 1, end: 1 } });
+  });
+
   it('builds a structured report summary from the selected range', () => {
     const summary = buildStructuredReportSummary(data, '2026-01-01', '2026-04-01', 'endpoint');
 

@@ -1,10 +1,10 @@
-import type { AppData, AssetCategory, AssetSnapshot } from './types';
-import { accountChanges, categoryTotals, riskAssetTotal } from './calculations';
+import type { AccountConfig, AppData, AssetCategory, AssetSnapshot } from './types';
+import { accountChanges, analysisAssetTotal, categoryTotals, riskAssetTotal } from './calculations';
 import { calendarMonthRange, isIsoDate, shiftMonth } from './dates';
 import { categories } from './defaults';
 import { formatMoney, formatPercent } from './format';
 import { analyzeStrategy } from './strategy';
-import { totalQuality } from './dashboard';
+import { accountChangeRows, totalQuality } from './dashboard';
 
 export type ReportMode = 'endpoint' | 'periodic';
 export type ReportRangePreset = 'all' | 'month' | '1m' | '3m' | '1y' | 'custom';
@@ -146,11 +146,11 @@ export function buildStructuredReportSummary(data: AppData, startDate: string, e
   const totalChange = endTotal - startTotal;
   const startTotals = categoryTotals(first, data.accounts);
   const endTotals = categoryTotals(last, data.accounts);
-  const contributionRows = accountContributionRows(first, last);
+  const contributionRows = accountContributionRows(first, last, data.accounts);
   const topIncreases = contributionRows.filter((row) => row.change > 0).slice(0, 3);
   const topDecreases = [...contributionRows].reverse().filter((row) => row.change < 0).slice(0, 3);
-  const startRiskRatio = first.computedGrossAssetsCny === 0 ? null : riskAssetTotal(startTotals) / first.computedGrossAssetsCny;
-  const endRiskRatio = last.computedGrossAssetsCny === 0 ? null : riskAssetTotal(endTotals) / last.computedGrossAssetsCny;
+  const startRiskRatio = riskRatio(startTotals, analysisAssetTotal(first, data.accounts));
+  const endRiskRatio = riskRatio(endTotals, analysisAssetTotal(last, data.accounts));
   const qualityMessages = dataQualityMessages(snapshots);
   const externalIncomeTotal = sumExternalIncome(snapshots);
 
@@ -199,11 +199,11 @@ export function generateMarkdownReport(data: AppData, startDate: string, endDate
   const growth = first.computedTotalCny === 0 ? null : change / first.computedTotalCny;
   const startTotals = categoryTotals(first, data.accounts);
   const endTotals = categoryTotals(last, data.accounts);
-  const accountDiffs = diffAccounts(first, last);
-  const largestIncrease = accountDiffs[0];
-  const largestDecrease = [...accountDiffs].reverse()[0];
-  const contributionRows = accountContributionRows(first, last).slice(0, 8);
-  const strategy = analyzeStrategy(last, data.strategy);
+  const accountDiffs = accountContributionRows(first, last, data.accounts);
+  const largestIncrease = accountDiffs.find((row) => row.change > 0);
+  const largestDecrease = [...accountDiffs].reverse().find((row) => row.change < 0);
+  const contributionRows = accountDiffs.slice(0, 8);
+  const strategy = analyzeStrategy(last, data.strategy, data.accounts);
 
   return [
     `# 资产复盘报告（${first.date} 至 ${last.date}）`,
@@ -236,15 +236,15 @@ export function generateMarkdownReport(data: AppData, startDate: string, endDate
   ].join('\n');
 }
 
-export function accountContributionRows(first: AssetSnapshot, last: AssetSnapshot): Array<{ accountName: string; change: number }> {
-  const firstAmounts = new Map(first.entries.map((entry) => [entry.accountId, entry.amountCny ?? 0]));
-  return last.entries
-    .map((entry) => ({ accountName: entry.accountName, change: (entry.amountCny ?? 0) - (firstAmounts.get(entry.accountId) ?? 0) }))
+/** change 是对净资产的影响：负债增加记为负值，隐藏账户不列出。 */
+export function accountContributionRows(first: AssetSnapshot, last: AssetSnapshot, accounts: AccountConfig[] = []): Array<{ accountName: string; change: number }> {
+  return accountChangeRows(first, last, accounts)
+    .map((row) => ({ accountName: row.accountName, change: row.impact }))
     .sort((a, b) => b.change - a.change);
 }
 
-function diffAccounts(first: AssetSnapshot, last: AssetSnapshot): Array<{ accountName: string; change: number }> {
-  return accountContributionRows(first, last);
+function riskRatio(totals: Record<AssetCategory, number>, analysisAssets: number): number | null {
+  return analysisAssets === 0 ? null : riskAssetTotal(totals) / analysisAssets;
 }
 
 function categoryLine(category: AssetCategory, start: number, end: number): string {

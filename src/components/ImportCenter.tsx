@@ -327,7 +327,7 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
                   <th>大类</th>
                   <th>渠道</th>
                   <th>币种</th>
-                  <th>计入统计</th>
+                  <th>计入净资产</th>
                   <th>示例值</th>
                 </tr>
               </thead>

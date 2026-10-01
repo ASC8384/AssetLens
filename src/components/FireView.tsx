@@ -11,7 +11,7 @@ function formatMonths(months: number | null): string {
 }
 
 export function FireView({ data, onChange }: { data: AppData; onChange: (data: AppData) => void }) {
-  const analysis = analyzeFire(data.snapshots, data.fire);
+  const analysis = analyzeFire(data.snapshots, data.fire, data.accounts);
 
   function updateFireNumber(key: keyof AppData['fire'], value: string) {
     const number = Number(value);
