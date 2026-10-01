@@ -151,6 +151,107 @@ describe('ImportCenter manual snapshot flow', () => {
     expect(snapshotsOnDate(kept.snapshots, '2026-05-01')).toHaveLength(2);
   });
 
+  it('groups manual accounts by category and shows previous amount with change', () => {
+    render(<ImportCenter data={createSampleData()} onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('开始手动输入'));
+
+    const equity = screen.getByRole('region', { name: '权益类账户' });
+    expect(within(equity).getByLabelText('场外基金A')).toBeTruthy();
+    expect(within(equity).queryByLabelText('活期账户A')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('场外基金A'), { target: { value: '61000' } });
+    expect(within(equity).getByText('上期 59,000')).toBeTruthy();
+    expect(within(equity).getByText('+2,000').className).toBe('positive');
+
+    const liability = screen.getByRole('region', { name: '负债账户' });
+    fireEvent.change(screen.getByLabelText('信用卡A'), { target: { value: '3500' } });
+    expect(within(liability).getByText('+500').className).toBe('negative');
+  });
+
+  it('collapses hidden accounts but still saves them', () => {
+    const data = createSampleData();
+    const hiddenData: AppData = { ...data, accounts: data.accounts.map((account) => account.name === '黄金A' ? { ...account, hidden: true } : account) };
+    const onChange = vi.fn();
+    const { container } = render(<ImportCenter data={hiddenData} onChange={onChange} />);
+
+    fireEvent.click(screen.getByText('开始手动输入'));
+
+    const hiddenGroup = container.querySelector('details.manual-hidden-group') as HTMLDetailsElement;
+    expect(hiddenGroup.open).toBe(false);
+    expect(within(hiddenGroup).getByLabelText('黄金A')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('保存'));
+    const latest = (onChange.mock.calls[0][0] as AppData).snapshots.at(-1)!;
+    expect(latest.entries.find((entry) => entry.accountName === '黄金A')?.originalAmount).toBe(5000);
+  });
+
+  it('removes an account from this snapshot and can restore it', () => {
+    const onChange = vi.fn();
+    render(<ImportCenter data={createSampleData()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByText('开始手动输入'));
+    fireEvent.click(screen.getByLabelText('移出本期：券商账户B'));
+
+    expect(screen.queryByLabelText('券商账户B')).toBeNull();
+    fireEvent.click(screen.getByLabelText('加回本期：券商账户B'));
+    expect((screen.getByLabelText('券商账户B') as HTMLInputElement).value).toBe('17500');
+
+    fireEvent.click(screen.getByLabelText('移出本期：券商账户B'));
+    fireEvent.click(screen.getByText('保存'));
+
+    const updated = onChange.mock.calls[0][0] as AppData;
+    const latest = updated.snapshots.at(-1)!;
+    expect(latest.entries.some((entry) => entry.accountName === '券商账户B')).toBe(false);
+    expect(updated.accounts.some((account) => account.name === '券商账户B')).toBe(true);
+    expect(updated.snapshots[0].entries.some((entry) => entry.accountName === '券商账户B')).toBe(true);
+  });
+
+  it('leaves accounts missing from the latest snapshot out by default', () => {
+    const data = createSampleData();
+    const closed = { ...data.accounts[0], id: 'closed-a', name: '已销户账户A' };
+    render(<ImportCenter data={{ ...data, accounts: [...data.accounts, closed] }} onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('开始手动输入'));
+
+    expect(screen.queryByLabelText('已销户账户A')).toBeNull();
+    expect(screen.getByLabelText('加回本期：已销户账户A')).toBeTruthy();
+  });
+
+  it('adds a new account inline and saves it with the snapshot', () => {
+    const onChange = vi.fn();
+    render(<ImportCenter data={createSampleData()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByText('开始手动输入'));
+    fireEvent.change(screen.getByLabelText('新账户名称'), { target: { value: '示例美元账户' } });
+    fireEvent.change(screen.getByLabelText('新账户大类'), { target: { value: '权益类' } });
+    fireEvent.change(screen.getByLabelText('新账户币种'), { target: { value: 'USD' } });
+    fireEvent.change(screen.getByLabelText('新账户金额'), { target: { value: '100' } });
+    fireEvent.click(screen.getByText('添加'));
+
+    const equity = screen.getByRole('region', { name: '权益类账户' });
+    expect((within(equity).getByLabelText('示例美元账户') as HTMLInputElement).value).toBe('100');
+    expect((screen.getByLabelText('新账户名称') as HTMLInputElement).value).toBe('');
+
+    fireEvent.click(screen.getByText('保存'));
+    const updated = onChange.mock.calls[0][0] as AppData;
+    const account = updated.accounts.find((item) => item.name === '示例美元账户');
+    expect(account).toMatchObject({ category: '权益类', defaultCurrency: 'USD' });
+    expect(updated.snapshots.at(-1)!.entries.find((entry) => entry.accountName === '示例美元账户')).toMatchObject({ originalAmount: 100, amountCny: 700 });
+    expect(updated.snapshots[0].entries.some((entry) => entry.accountName === '示例美元账户')).toBe(false);
+  });
+
+  it('rejects a new account that duplicates an existing one', () => {
+    render(<ImportCenter data={createSampleData()} onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('开始手动输入'));
+    fireEvent.change(screen.getByLabelText('新账户名称'), { target: { value: '场外基金A' } });
+    fireEvent.click(screen.getByText('添加'));
+
+    expect(screen.getByText('已有账户“场外基金A”，直接修改它的金额即可。')).toBeTruthy();
+    expect(screen.getAllByLabelText('场外基金A')).toHaveLength(1);
+  });
+
   it('shows a prompt instead of the full form when there are no accounts to fill', () => {
     render(<ImportCenter data={createEmptyAppData()} onChange={vi.fn()} />);
 

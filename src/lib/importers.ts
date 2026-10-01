@@ -265,7 +265,7 @@ export function mergeImportedData(data: AppData, imported: AssetSnapshot[], acco
   };
 }
 
-function manualSnapshotAccounts(data: AppData, previous: AssetSnapshot | undefined): AccountConfig[] {
+export function manualSnapshotAccounts(data: AppData, previous: AssetSnapshot | undefined = data.snapshots[data.snapshots.length - 1]): AccountConfig[] {
   return data.accounts.length > 0 ? data.accounts : previous?.entries.map((entry) => ({
     id: entry.accountId,
     name: entry.accountName,
@@ -280,11 +280,13 @@ function manualSnapshotAccounts(data: AppData, previous: AssetSnapshot | undefin
 export type ManualSnapshotExtras = {
   externalIncome?: string;
   note?: string;
+  /** 本期要记录的账户；不传时沿用全部已知账户。 */
+  accounts?: AccountConfig[];
 };
 
 export function buildManualSnapshot(data: AppData, date: string, amountByAccountId: Record<string, string | undefined>, extras: ManualSnapshotExtras = {}): AssetSnapshot {
   const previous = data.snapshots[data.snapshots.length - 1];
-  const accounts = manualSnapshotAccounts(data, previous);
+  const accounts = extras.accounts ?? manualSnapshotAccounts(data, previous);
   const exchangeRates = { ...data.defaultExchangeRates, ...(previous?.exchangeRates ?? {}) };
   return recalculateSnapshot({
     id: crypto.randomUUID(),

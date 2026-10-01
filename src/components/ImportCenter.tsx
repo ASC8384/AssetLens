@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isLiabilityCategory } from '../lib/calculations';
-import { buildManualSnapshot, buildSnapshotsFromDraft, createImportDraft, mergeImportedData, parseExcelFile, parsePastedTable } from '../lib/importers';
+import { buildManualSnapshot, buildSnapshotsFromDraft, createImportDraft, manualSnapshotAccounts, mergeImportedData, parseExcelFile, parsePastedTable } from '../lib/importers';
 import { analyzeImportQuality, ignoreTotalColumns } from '../lib/importQuality';
-import { formatMoney, formatPercent } from '../lib/format';
+import { formatMoney, formatPercent, parseNumber } from '../lib/format';
 import { resolveExternalIncome } from '../lib/income';
-import type { AccountConfig, AppData, DuplicateDateMode, FieldMapping, ImportDraft } from '../lib/types';
-import { categories, venues } from '../lib/defaults';
+import type { AccountConfig, AccountEntry, AccountVenue, AppData, AssetCategory, AssetSnapshot, DuplicateDateMode, FieldMapping, ImportDraft } from '../lib/types';
+import { categories, categoryForAccount, createAccountConfig, venueForAccount, venues } from '../lib/defaults';
 import { isIsoDate, todayString } from '../lib/dates';
 import { snapshotsOnDate } from '../lib/snapshotDates';
 import { SnapshotDateDialog } from './SnapshotDateDialog';
@@ -16,10 +16,34 @@ type ManualDraft = {
   date: string;
   source: ManualSource;
   amountByAccountId: Record<string, string>;
+  /** 本期新开的账户，保存快照时才写入账户配置。 */
+  newAccounts: AccountConfig[];
+  excludedAccountIds: string[];
   externalIncome: string;
   incomeHint: string;
   note: string;
 };
+
+type NewAccountForm = {
+  name: string;
+  category: AssetCategory | '';
+  venue: AccountVenue | '';
+  currency: string;
+  amount: string;
+};
+
+const emptyNewAccountForm: NewAccountForm = { name: '', category: '', venue: '', currency: 'CNY', amount: '' };
+
+const amountFormat = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
+
+function formatAmount(value: number | null, currency: string): string {
+  if (value === null) return '—';
+  return currency === 'CNY' ? amountFormat.format(value) : `${amountFormat.format(value)} ${currency}`;
+}
+
+function signed(value: number, text: string): string {
+  return value > 0 ? `+${text}` : text;
+}
 
 export type ImportCompletion = {
   data: AppData;
@@ -30,19 +54,6 @@ export type ImportCompletion = {
   isFirstImport: boolean;
 };
 
-function manualAccounts(data: AppData): AccountConfig[] {
-  const previous = data.snapshots[data.snapshots.length - 1];
-  return data.accounts.length > 0 ? data.accounts : previous?.entries.map((entry) => ({
-    id: entry.accountId,
-    name: entry.accountName,
-    category: entry.category,
-    venue: entry.venue,
-    defaultCurrency: entry.currency,
-    includedInTotal: entry.includedInTotal,
-    hidden: false,
-  })) ?? [];
-}
-
 function manualAmountDefaults(data: AppData, accounts: AccountConfig[], source: ManualSource): Record<string, string> {
   if (source === 'blank') return Object.fromEntries(accounts.map((account) => [account.id, '']));
   const previous = data.snapshots[data.snapshots.length - 1];
@@ -51,11 +62,16 @@ function manualAmountDefaults(data: AppData, accounts: AccountConfig[], source: 
 }
 
 function createManualDraft(data: AppData, accounts: AccountConfig[], source: ManualSource = 'latest'): ManualDraft {
-  const carried = source === 'blank' ? { amount: null, sourceDate: null, inherited: false } : resolveExternalIncome(data.snapshots, data.snapshots[data.snapshots.length - 1]);
+  const previous = data.snapshots[data.snapshots.length - 1];
+  const carried = source === 'blank' ? { amount: null, sourceDate: null, inherited: false } : resolveExternalIncome(data.snapshots, previous);
+  const previousIds = previous ? new Set(previous.entries.map((entry) => entry.accountId)) : null;
   return {
     date: todayString(),
     source,
     amountByAccountId: manualAmountDefaults(data, accounts, source),
+    newAccounts: [],
+    // 上一期就没有记录的账户（多半已销户）默认不带进本期，需要时可以加回。
+    excludedAccountIds: previousIds ? accounts.filter((account) => !previousIds.has(account.id)).map((account) => account.id) : [],
     externalIncome: '',
     incomeHint: carried.amount === null ? '工资等非理财流入' : `上次 ${formatMoney(carried.amount)}（${carried.sourceDate}）`,
     note: '',
@@ -69,9 +85,25 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
   const [duplicateMode, setDuplicateMode] = useState<DuplicateDateMode>('overwrite');
   const [manualError, setManualError] = useState('');
   const [pendingManualDate, setPendingManualDate] = useState<string | null>(null);
+  const [newAccount, setNewAccount] = useState<NewAccountForm>(emptyNewAccountForm);
+  const [newAccountError, setNewAccountError] = useState('');
   const importedPreview = useMemo(() => draft ? buildSnapshotsFromDraft(draft, data.accounts, data.defaultExchangeRates) : null, [draft, data.accounts, data.defaultExchangeRates]);
   const importQuality = useMemo(() => importedPreview ? analyzeImportQuality(importedPreview.snapshots, importedPreview.accounts.length) : null, [importedPreview]);
-  const manualAccountList = useMemo(() => manualAccounts(data), [data]);
+  const manualAccountList = useMemo(() => manualSnapshotAccounts(data), [data]);
+  const latestSnapshot: AssetSnapshot | undefined = data.snapshots[data.snapshots.length - 1];
+  const previousEntryById = useMemo(() => new Map(latestSnapshot?.entries.map((entry) => [entry.accountId, entry]) ?? []), [latestSnapshot]);
+  const currencyOptions = useMemo(() => Object.keys({ ...data.defaultExchangeRates, ...(latestSnapshot?.exchangeRates ?? {}) }), [data.defaultExchangeRates, latestSnapshot]);
+  const manualIncludedAccounts = useMemo(() => {
+    if (!manualDraft) return [];
+    const excluded = new Set(manualDraft.excludedAccountIds);
+    return [...manualAccountList, ...manualDraft.newAccounts].filter((account) => !excluded.has(account.id));
+  }, [manualDraft, manualAccountList]);
+  const manualPreview = useMemo(
+    () => manualDraft && manualIncludedAccounts.length > 0
+      ? buildManualSnapshot(data, manualDraft.date, manualDraft.amountByAccountId, { accounts: manualIncludedAccounts })
+      : null,
+    [data, manualDraft, manualIncludedAccounts],
+  );
   const foreignMappings = useMemo(
     () => draft?.mappings.filter((mapping) => mapping.role === 'account' && mapping.import && (mapping.currency ?? 'CNY') !== 'CNY') ?? [],
     [draft],
@@ -83,6 +115,8 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
     setDuplicateMode('overwrite');
     setManualError('');
     setPendingManualDate(null);
+    setNewAccount(emptyNewAccountForm);
+    setNewAccountError('');
     setManualDraft(createManualDraft(data, manualAccountList));
   }, [manualInputRequest, data, manualAccountList]);
 
@@ -108,7 +142,17 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
     setDuplicateMode('overwrite');
     setManualError('');
     setPendingManualDate(null);
+    setNewAccount(emptyNewAccountForm);
+    setNewAccountError('');
     setManualDraft(createManualDraft(data, manualAccountList));
+  }
+
+  function closeManualInput() {
+    setManualDraft(null);
+    setManualError('');
+    setPendingManualDate(null);
+    setNewAccount(emptyNewAccountForm);
+    setNewAccountError('');
   }
 
   function updateMapping(columnIndex: number, patch: Partial<FieldMapping>) {
@@ -132,10 +176,68 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
     const next = createManualDraft(data, manualAccountList, source);
     setManualDraft({
       ...next,
+      amountByAccountId: {
+        ...next.amountByAccountId,
+        ...Object.fromEntries(manualDraft.newAccounts.map((account) => [account.id, manualDraft.amountByAccountId[account.id] ?? ''])),
+      },
+      newAccounts: manualDraft.newAccounts,
+      excludedAccountIds: manualDraft.excludedAccountIds,
       date: manualDraft.date,
       externalIncome: manualDraft.externalIncome,
       note: manualDraft.note,
     });
+  }
+
+  function excludeManualAccount(accountId: string) {
+    if (!manualDraft) return;
+    if (manualDraft.newAccounts.some((account) => account.id === accountId)) {
+      const amountByAccountId = { ...manualDraft.amountByAccountId };
+      delete amountByAccountId[accountId];
+      setManualDraft({ ...manualDraft, amountByAccountId, newAccounts: manualDraft.newAccounts.filter((account) => account.id !== accountId) });
+      return;
+    }
+    setManualDraft({ ...manualDraft, excludedAccountIds: [...manualDraft.excludedAccountIds, accountId] });
+  }
+
+  function restoreManualAccount(accountId: string, amount?: string) {
+    if (!manualDraft) return;
+    setManualDraft({
+      ...manualDraft,
+      excludedAccountIds: manualDraft.excludedAccountIds.filter((id) => id !== accountId),
+      amountByAccountId: amount ? { ...manualDraft.amountByAccountId, [accountId]: amount } : manualDraft.amountByAccountId,
+    });
+  }
+
+  function addManualAccount() {
+    if (!manualDraft) return;
+    const name = newAccount.name.trim();
+    if (!name) {
+      setNewAccountError('请输入账户名称。');
+      return;
+    }
+    const base = createAccountConfig(name);
+    const sameAccount = (account: AccountConfig) => account.id === base.id || account.name.trim() === name;
+    const existing = manualAccountList.find(sameAccount);
+    if (existing && manualDraft.excludedAccountIds.includes(existing.id)) {
+      restoreManualAccount(existing.id, newAccount.amount.trim());
+    } else if (existing || manualDraft.newAccounts.some(sameAccount)) {
+      setNewAccountError(`已有账户“${existing?.name ?? name}”，直接修改它的金额即可。`);
+      return;
+    } else {
+      const account: AccountConfig = {
+        ...base,
+        category: newAccount.category || base.category,
+        venue: newAccount.venue || base.venue,
+        defaultCurrency: newAccount.currency,
+      };
+      setManualDraft({
+        ...manualDraft,
+        newAccounts: [...manualDraft.newAccounts, account],
+        amountByAccountId: { ...manualDraft.amountByAccountId, [account.id]: newAccount.amount.trim() },
+      });
+    }
+    setNewAccount(emptyNewAccountForm);
+    setNewAccountError('');
   }
 
   function confirmImport() {
@@ -160,20 +262,19 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
   }
 
   function saveManualSnapshot(date: string, mode: DuplicateDateMode) {
-    if (!manualDraft || manualAccountList.length === 0) return;
+    if (!manualDraft || manualIncludedAccounts.length === 0) return;
     const snapshot = buildManualSnapshot(data, date, manualDraft.amountByAccountId, {
       externalIncome: manualDraft.externalIncome,
       note: manualDraft.note,
+      accounts: manualIncludedAccounts,
     });
-    const nextData = mergeImportedData(data, [snapshot], manualAccountList, mode);
+    const nextData = mergeImportedData(data, [snapshot], [...manualAccountList, ...manualDraft.newAccounts], mode);
     if (onManualSnapshotCreated) {
       onManualSnapshotCreated(nextData);
     } else {
       onChange(nextData);
     }
-    setManualDraft(null);
-    setManualError('');
-    setPendingManualDate(null);
+    closeManualInput();
   }
 
   function confirmManualInput() {
@@ -182,12 +283,113 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
       setManualError('请选择有效日期。');
       return;
     }
+    if (manualIncludedAccounts.length === 0) {
+      setManualError('本期至少要保留一个账户。');
+      return;
+    }
     if (snapshotsOnDate(data.snapshots, manualDraft.date).length > 0) {
       setManualError('');
       setPendingManualDate(manualDraft.date);
       return;
     }
     saveManualSnapshot(manualDraft.date, 'keep');
+  }
+
+  function renderManualForm(manual: ManualDraft) {
+    const newAccountIds = new Set(manual.newAccounts.map((account) => account.id));
+    const visibleAccounts = manualIncludedAccounts.filter((account) => !account.hidden);
+    const hiddenAccounts = manualIncludedAccounts.filter((account) => account.hidden);
+    const excludedAccounts = manualAccountList.filter((account) => manual.excludedAccountIds.includes(account.id));
+    const previewEntryById = new Map(manualPreview?.entries.map((entry) => [entry.accountId, entry]) ?? []);
+    const subtotal = (accounts: AccountConfig[]) => accounts.reduce((sum, account) => sum + (previewEntryById.get(account.id)?.amountCny ?? 0), 0);
+    const netChange = manualPreview && latestSnapshot ? manualPreview.computedTotalCny - latestSnapshot.computedTotalCny : null;
+    const renderRow = (account: AccountConfig) => (
+      <ManualAccountRow
+        key={account.id}
+        account={account}
+        value={manual.amountByAccountId[account.id] ?? ''}
+        previous={previousEntryById.get(account.id)}
+        isNew={newAccountIds.has(account.id)}
+        onChange={(value) => updateManualAmount(account.id, value)}
+        onExclude={() => excludeManualAccount(account.id)}
+      />
+    );
+    return (
+      <>
+        <div className="manual-meta-grid">
+          <label>日期<input aria-label="日期" type="date" value={manual.date} onChange={(event) => setManualDraft({ ...manual, date: event.target.value })} /></label>
+          <label>外界收入
+            <input aria-label="外界收入" value={manual.externalIncome} onChange={(event) => setManualDraft({ ...manual, externalIncome: event.target.value })} placeholder={manual.incomeHint} />
+          </label>
+          <label>备注<input aria-label="备注" value={manual.note} onChange={(event) => setManualDraft({ ...manual, note: event.target.value })} /></label>
+        </div>
+
+        <div className="manual-summary">
+          <span>本期净资产<strong>{formatMoney(manualPreview?.computedTotalCny)}</strong></span>
+          {netChange !== null && latestSnapshot ? (
+            <span>较上期（{latestSnapshot.date}）<strong className={netChange > 0 ? 'positive' : netChange < 0 ? 'negative' : ''}>{signed(netChange, formatMoney(netChange))}</strong></span>
+          ) : null}
+          <span>{manualIncludedAccounts.length} 个账户{excludedAccounts.length > 0 ? `，${excludedAccounts.length} 个未纳入本期` : ''}</span>
+        </div>
+
+        <div className="manual-groups">
+          {categories.map((category) => {
+            const accounts = visibleAccounts.filter((account) => account.category === category);
+            if (accounts.length === 0) return null;
+            return (
+              <section key={category} className="manual-group" aria-label={`${category}账户`}>
+                <div className="manual-group-header">
+                  <strong>{category}</strong>
+                  <span>{accounts.length} 个 · 小计 {formatMoney(subtotal(accounts))}</span>
+                </div>
+                {accounts.map(renderRow)}
+              </section>
+            );
+          })}
+          {hiddenAccounts.length > 0 && (
+            <details className="manual-group manual-hidden-group">
+              <summary>隐藏账户（{hiddenAccounts.length}）· 小计 {formatMoney(subtotal(hiddenAccounts))}</summary>
+              {hiddenAccounts.map(renderRow)}
+            </details>
+          )}
+        </div>
+
+        {excludedAccounts.length > 0 && (
+          <div className="manual-excluded">
+            <span>未纳入本期：</span>
+            {excludedAccounts.map((account) => (
+              <button key={account.id} aria-label={`加回本期：${account.name}`} onClick={() => restoreManualAccount(account.id)}>{account.name} ＋</button>
+            ))}
+            <small>保存后这些账户在本期没有记录，历史数据不受影响。</small>
+          </div>
+        )}
+
+        <form className="manual-add-account" onSubmit={(event) => { event.preventDefault(); addManualAccount(); }}>
+          <strong>新增账户</strong>
+          <label>名称<input aria-label="新账户名称" value={newAccount.name} onChange={(event) => setNewAccount({ ...newAccount, name: event.target.value })} placeholder="如：券商账户B" /></label>
+          <label>大类
+            <select aria-label="新账户大类" value={newAccount.category} onChange={(event) => setNewAccount({ ...newAccount, category: event.target.value as NewAccountForm['category'] })}>
+              <option value="">自动（{categoryForAccount(newAccount.name)}）</option>
+              {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+            </select>
+          </label>
+          <label>渠道
+            <select aria-label="新账户渠道" value={newAccount.venue} onChange={(event) => setNewAccount({ ...newAccount, venue: event.target.value as NewAccountForm['venue'] })}>
+              <option value="">自动（{venueForAccount(newAccount.name)}）</option>
+              {venues.map((venue) => <option key={venue} value={venue}>{venue}</option>)}
+            </select>
+          </label>
+          <label>币种
+            <select aria-label="新账户币种" value={newAccount.currency} onChange={(event) => setNewAccount({ ...newAccount, currency: event.target.value })}>
+              {currencyOptions.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+            </select>
+          </label>
+          <label>金额<input aria-label="新账户金额" value={newAccount.amount} onChange={(event) => setNewAccount({ ...newAccount, amount: event.target.value })} /></label>
+          <button type="submit">添加</button>
+          {newAccountError ? <p className="danger-text">{newAccountError}</p> : null}
+        </form>
+      </>
+    );
   }
 
   return (
@@ -209,7 +411,7 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
 
       <div className="help-card manual-card">
         <h3>手动新增一期</h3>
-        <p>按最近一期金额预填，适合只调整少数账户后快速补录一条新快照。</p>
+        <p>按最近一期金额预填，可顺手新增账户或把已销户的账户移出本期。</p>
         {!manualDraft && <button onClick={startManualInput}>开始手动输入</button>}
       </div>
 
@@ -218,7 +420,7 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
           <div className="section-header">
             <div>
               <h3>手动新增一期</h3>
-              <p>沿用上一期数值，按需修改即可。</p>
+              <p>沿用上一期数值，按大类分组；每个账户旁边对照上期金额和本期变化。</p>
             </div>
             <div className="toolbar compact-toolbar">
               {manualAccountList.length > 0 && (
@@ -232,25 +434,14 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
                   <button className="primary" onClick={confirmManualInput}>保存</button>
                 </>
               )}
-              <button onClick={() => { setManualDraft(null); setPendingManualDate(null); setManualError(''); }}>取消</button>
+              <button onClick={closeManualInput}>取消</button>
             </div>
           </div>
           {manualError ? <p className="danger-text">{manualError}</p> : null}
 
           {manualAccountList.length === 0 ? (
             <p>请先导入一次数据，或先到明细表新增账户。</p>
-          ) : (
-            <div className="manual-grid">
-              <label>日期<input aria-label="日期" type="date" value={manualDraft.date} onChange={(event) => setManualDraft({ ...manualDraft, date: event.target.value })} /></label>
-              <label>外界收入
-                <input aria-label="外界收入" value={manualDraft.externalIncome} onChange={(event) => setManualDraft({ ...manualDraft, externalIncome: event.target.value })} placeholder={manualDraft.incomeHint} />
-              </label>
-              <label>备注<input aria-label="备注" value={manualDraft.note} onChange={(event) => setManualDraft({ ...manualDraft, note: event.target.value })} /></label>
-              {manualAccountList.map((account) => (
-                <label key={account.id}>{account.name}{isLiabilityCategory(account.category) ? '（欠款）' : ''}<input aria-label={account.name} value={manualDraft.amountByAccountId[account.id] ?? ''} onChange={(event) => updateManualAmount(account.id, event.target.value)} /></label>
-              ))}
-            </div>
-          )}
+          ) : renderManualForm(manualDraft)}
         </div>
       )}
 
@@ -395,6 +586,40 @@ export function ImportCenter({ data, onChange, onImportComplete, manualInputRequ
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function ManualAccountRow({ account, value, previous, isNew, onChange, onExclude }: {
+  account: AccountConfig;
+  value: string;
+  previous: AccountEntry | undefined;
+  isNew: boolean;
+  onChange: (value: string) => void;
+  onExclude: () => void;
+}) {
+  const liability = isLiabilityCategory(account.category);
+  const previousAmount = isNew ? null : previous?.originalAmount ?? null;
+  const currentAmount = parseNumber(value);
+  const diff = previousAmount !== null && currentAmount !== null ? currentAmount - previousAmount : null;
+  const netEffect = diff === null ? 0 : liability ? -diff : diff;
+  const meta = [account.venue, account.defaultCurrency !== 'CNY' ? account.defaultCurrency : null, liability ? '欠款' : null, isNew ? '新账户' : null].filter(Boolean).join(' · ');
+  return (
+    <div className="manual-account-row">
+      <div className="manual-account-name">
+        <strong>{account.name}</strong>
+        <small>{meta}</small>
+      </div>
+      <input aria-label={account.name} value={value} onChange={(event) => onChange(event.target.value)} />
+      <div className="manual-account-delta">
+        <small>上期 {isNew ? '无' : formatAmount(previousAmount, account.defaultCurrency)}</small>
+        {diff !== null ? (
+          <span className={netEffect > 0 ? 'positive' : netEffect < 0 ? 'negative' : 'muted'}>
+            {diff === 0 ? '无变化' : signed(diff, formatAmount(diff, account.defaultCurrency))}
+          </span>
+        ) : null}
+      </div>
+      <button type="button" className="link-button" aria-label={`移出本期：${account.name}`} onClick={onExclude}>移出</button>
     </div>
   );
 }
